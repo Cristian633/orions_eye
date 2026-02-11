@@ -1,0 +1,31 @@
+name: orions_eye_app
+description: A Flutter application for Orion's Eye
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.4.9
+  dio: ^5.4.0
+  web_socket_channel: ^2.4.0
+  fl_chart: ^0.66.0
+  go_router: ^13.0.0
+  shared_preferences: ^2.2.2
+  logger: ^2.0.2
+  intl: ^0.18.1
+  amazon_cognito_identity_dart_2: ^3.8.1
+  http: ^1.1.0
+  flutter_blue_plus: ^1.16.7
+  permission_handler: ^11.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
