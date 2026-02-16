@@ -214,7 +214,7 @@ class DashboardScreen extends ConsumerWidget {
                           device: device,
                           onTap: () {
                             context.push('/device/${device.id}?name=${device.name}');
-},
+                          },
                         );
                       },
                     ),
@@ -248,9 +248,12 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    
+                    // ✅ BOTÓN BLUETOOTH CON RUTA CORRECTA
                     ElevatedButton.icon(
                       icon: const Icon(Icons.bluetooth),
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.secondary,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -258,14 +261,18 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       onPressed: () {
                         Navigator.of(context).pop();
-                        context.push('/add-spectrometer-bluetooth');
+                        context.push('/bluetooth-scan');  // ✅ CORREGIDO
                       },
                       label: const Text('Conectar por Bluetooth'),
                     ),
+                    
                     const SizedBox(height: 8),
+                    
+                    // ✅ BOTÓN WIFI CON RUTA CORRECTA
                     OutlinedButton.icon(
                       icon: const Icon(Icons.wifi),
                       style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         side: const BorderSide(color: AppTheme.secondary),
                         shape: RoundedRectangleBorder(
@@ -274,7 +281,7 @@ class DashboardScreen extends ConsumerWidget {
                       ),
                       onPressed: () {
                         Navigator.of(context).pop();
-                        context.push('/add-spectrometer-wifi');
+                        context.push('/wifi-setup');  // ✅ CORREGIDO
                       },
                       label: const Text(
                         'Conectar por Wi‑Fi',

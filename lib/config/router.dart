@@ -6,38 +6,39 @@ import '../presentation/screens/device_detail_screen.dart';
 import '../presentation/providers/auth_provider.dart';
 import '../presentation/screens/register_screen.dart';
 import '../presentation/screens/gallery_screen.dart';
-import '../presentation/screens/observation_detail_screen.dart';  
+import '../presentation/screens/observation_detail_screen.dart';
 import '../presentation/screens/profile_screen.dart';
 import '../presentation/screens/verify_email_screen.dart';
-import '../presentation/screens/welcome_screen.dart';           // NUEVO
-import '../presentation/screens/bluetooth_scan_screen.dart';    // NUEVO
-import '../presentation/screens/wifi_setup_screen.dart';        //  NUEVO
-import '../presentation/screens/add_spectrometer_bluetooth_screen.dart';
-import '../presentation/screens/add_spectrometer_wifi_screen.dart';
+import '../presentation/screens/welcome_screen.dart';
+import '../presentation/screens/bluetooth_scan_screen.dart';
+import '../presentation/screens/wifi_setup_screen.dart';
+import '../presentation/screens/device_setup_success_screen.dart';  //  NUEVO
+import '../presentation/screens/device_connecting_screen.dart';      // NUEVO
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
   return GoRouter(
-    initialLocation: '/welcome',  //  Cambia a /welcome para que sea la primera pantalla
+    initialLocation: '/welcome',
     
     redirect: (context, state) {
       final isLoggingIn = state.matchedLocation == '/login';
       final isRegistering = state.matchedLocation == '/register';
       final isVerifying = state.matchedLocation == '/verify-email';
-      final isWelcome = state.matchedLocation == '/welcome';           //  NUEVO
-      final isBluetoothScan = state.matchedLocation == '/bluetooth-scan';  // ✨ NUEVO
-      final isWifiSetup = state.matchedLocation == '/wifi-setup';      //  NUEVO
+      final isWelcome = state.matchedLocation == '/welcome';
+      final isBluetoothScan = state.matchedLocation == '/bluetooth-scan';
+      final isWifiSetup = state.matchedLocation == '/wifi-setup';
+      final isDeviceSetup = state.matchedLocation.startsWith('/device-setup');  // ✨ NUEVO
 
-      // Permitir acceso a pantallas públicas sin autenticación
       if (!isAuthenticated && 
           !isLoggingIn && 
           !isRegistering && 
           !isVerifying && 
-          !isWelcome &&           //  NUEVO
-          !isBluetoothScan &&     // NUEVO
-          !isWifiSetup) {         // NUEVO
-        return '/welcome';  // Redirige a welcome en lugar de login
+          !isWelcome &&
+          !isBluetoothScan &&
+          !isWifiSetup &&
+          !isDeviceSetup) {  // ✨ NUEVO
+        return '/welcome';
       }
 
       if (isAuthenticated && (isLoggingIn || isRegistering || isWelcome)) {
@@ -47,41 +48,49 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      //  RUTA NUEVA: Welcome (Pantalla inicial)
       GoRoute(
         path: '/welcome',
         name: 'welcome',
         builder: (context, state) => const WelcomeScreen(),
       ),
       
-      //  RUTA NUEVA: Bluetooth Scan
       GoRoute(
         path: '/bluetooth-scan',
         name: 'bluetooth-scan',
         builder: (context, state) => const BluetoothScanScreen(),
       ),
       
-      //  RUTA NUEVA: WiFi Setup
       GoRoute(
         path: '/wifi-setup',
         name: 'wifi-setup',
-        builder: (context, state) => const WifiSetupScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return WifiSetupScreen(
+            deviceId: extra?['deviceId'],
+            deviceExtra: extra,
+          );
+        },
       ),
+      
+      //  NUEVAS RUTAS
       GoRoute(
-        path: '/dashboard',
-        name: 'dashboard',
-        builder: (context, state) => const DashboardScreen(),
+        path: '/device-connecting',
+        name: 'device-connecting',
+        builder: (context, state) {
+          final deviceName = (state.extra as Map<String, dynamic>?)?['deviceName'] ?? 'Dispositivo';
+          return DeviceConnectingScreen(deviceName: deviceName);
+        },
       ),
+      
       GoRoute(
-        path: '/add-spectrometer-bluetooth',
-        name: 'add-spectrometer-bluetooth',
-        builder: (context, state) => const AddSpectrometerBluetoothScreen(),
+        path: '/device-setup-success',
+        name: 'device-setup-success',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return DeviceSetupSuccessScreen(extra: extra);
+        },
       ),
-      GoRoute(
-        path: '/add-spectrometer-wifi',
-        name: 'add-spectrometer-wifi',
-        builder: (context, state) => const AddSpectrometerWifiScreen(),
-      ),
+      
       GoRoute(
         path: '/login',
         name: 'login',
@@ -101,7 +110,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/device/:id',  
+        path: '/dashboard',
+        name: 'dashboard',
+        builder: (context, state) => const DashboardScreen(),
+      ),
+      GoRoute(
+        path: '/device/:id',
         name: 'device-detail',
         builder: (context, state) {
           final deviceId = state.pathParameters['id']!;
@@ -128,11 +142,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(  
+      GoRoute(
         path: '/profile',
         name: 'profile',
         builder: (context, state) => const ProfileScreen(),
       ),
-    ], 
+    ],
   );
 });
