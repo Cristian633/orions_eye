@@ -8,68 +8,65 @@ class WelcomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          // Background image
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/welcome_bg.jpg',
-              fit: BoxFit.cover,
-            ),
+          // Imagen de fondo (opcional; asegúrate de que exista)
+          Image.asset(
+            'assets/welcome_bg.jpg',
+            fit: BoxFit.cover,
           ),
-
-          // Dark overlay for readable text
-          Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.45)),
-          ),
-
-          // Content
+          // Capa oscura para que se lea el texto
+          Container(color: Colors.black.withOpacity(0.55)),
+          // Contenido centrado
           SafeArea(
-            child: Column(
-              children: [
-                const SizedBox(height: 40),
-                // Logo
-                Image.asset('assets/images/logo.png', width: 96, height: 96),
-
-                const SizedBox(height: 24),
-                const Text(
-                  "Orion's Eye",
-                  style: TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 32),
-                  child: Text(
-                    "Monitorea tus dispositivos IoT y recibe alertas en tiempo real.",
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const Spacer(),
-
-                // Buttons
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ElevatedButton(
-                        onPressed: () => context.push('/login'),
-                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                        child: const Text('Iniciar sesión', style: TextStyle(fontSize: 16)),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "Bienvenido a Orion's Eye",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: () => context.push('/register'),
-                        style: OutlinedButton.styleFrom(
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      "Conecta tu espectrómetro y visualiza tus observaciones desde cualquier lugar.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: Colors.white70),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
                         ),
-                        child: const Text('Registrarse', style: TextStyle(fontSize: 16, color: Colors.white)),
+                        onPressed: () {
+                          // Aquí eliges si quieres ir a login o a registro
+                          context.push('/login');
+                          // o: context.push('/register');
+                        },
+                        child: const Text(
+                          'Comenzar',
+                          style: TextStyle(fontSize: 16),
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ],
