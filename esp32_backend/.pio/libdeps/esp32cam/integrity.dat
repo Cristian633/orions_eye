@@ -1,0 +1,4 @@
+bblanchon/ArduinoJson@^6.21.3
+me-no-dev/ESPAsyncWebServer@^1.2.3
+knolleary/PubSubClient@^2.8
+me-no-dev/AsyncTCP@^1.1.1

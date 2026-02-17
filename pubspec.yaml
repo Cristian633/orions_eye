@@ -21,6 +21,7 @@ dependencies:
   http: ^1.1.0
   flutter_reactive_ble: ^5.3.1
   permission_handler: ^11.3.0
+  shelf: ^1.4.1
 
 dev_dependencies:
   flutter_test:
