@@ -1,0 +1,15 @@
+version = 0.1
+
+[default.build.parameters]
+python_version = "3.11"
+[default.deploy.parameters]
+stack_name = "orions-eye-backend-dev"
+resolve_s3 = true
+s3_prefix = "orions-eye-backend-dev"
+region = "us-east-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=\"dev\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-2"

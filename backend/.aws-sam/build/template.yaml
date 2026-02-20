@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Orion's Eye Backend - MVP
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+  CognitoUserPoolArn:
+    Type: String
+    Default: arn:aws:cognito-idp:us-east-2:219282777127:userpool/us-east-2_I6UCDeRO3
+    Description: ARN del User Pool de Cognito
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        ENVIRONMENT:
+          Ref: Environment
+        DEVICES_TABLE:
+          Ref: DevicesTable
+        OBSERVATIONS_TABLE:
+          Ref: ObservationsTable
+        S3_BUCKET:
+          Ref: ImagesBucket
+  Api:
+    Cors:
+      AllowOrigin: '''*'''
+      AllowHeaders: '''Content-Type,Authorization'''
+      AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+    Auth:
+      DefaultAuthorizer: CognitoAuthorizer
+      Authorizers:
+        CognitoAuthorizer:
+          UserPoolArn:
+            Ref: CognitoUserPoolArn
+Resources:
+  DevicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: orions-eye-devices-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: deviceId
+        AttributeType: S
+      - AttributeName: userId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: deviceId
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: UserIdIndex
+        KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        Projection:
+          ProjectionType: ALL
+  ObservationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: orions-eye-observations-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+      - AttributeName: observationId
+        AttributeType: S
+      - AttributeName: userId
+        AttributeType: S
+      - AttributeName: timestamp
+        AttributeType: S
+      KeySchema:
+      - AttributeName: observationId
+        KeyType: HASH
+      GlobalSecondaryIndexes:
+      - IndexName: UserIdIndex
+        KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: orions-eye-images-${Environment}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+  GetDevicesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: orions-eye-get-devices-${Environment}
+      CodeUri: GetDevicesFunction
+      Handler: handler.lambda_handler
+      Policies:
+      - DynamoDBReadPolicy:
+          TableName:
+            Ref: DevicesTable
+      Events:
+        GetDevices:
+          Type: Api
+          Properties:
+            Path: /devices
+            Method: GET
+    Metadata:
+      SamResourceId: GetDevicesFunction
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod
+  DevicesTableName:
+    Value:
+      Ref: DevicesTable
+  ObservationsTableName:
+    Value:
+      Ref: ObservationsTable
+  ImagesBucketName:
+    Value:
+      Ref: ImagesBucket

@@ -1,0 +1,4 @@
+# No external dependencies required for this function.
+# `boto3` is provided by the AWS Lambda Python runtime and
+# does not need to be packaged with the function.
+
