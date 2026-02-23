@@ -1,16 +1,15 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Orion's Eye Backend - MVP
+Description: Orion's Eye Backend - Complete
 
 Parameters:
   Environment:
     Type: String
     Default: dev
-  
+
   CognitoUserPoolArn:
     Type: String
     Default: arn:aws:cognito-idp:us-east-2:219282777127:userpool/us-east-2_I6UCDeRO3
-    Description: ARN del User Pool de Cognito
 
 Globals:
   Function:
@@ -23,7 +22,8 @@ Globals:
         DEVICES_TABLE: !Ref DevicesTable
         OBSERVATIONS_TABLE: !Ref ObservationsTable
         S3_BUCKET: !Ref ImagesBucket
-  
+        IOT_POLICY_NAME: OrionsEyeDevicePolicy
+
   Api:
     Cors:
       AllowOrigin: "'*'"
@@ -36,6 +36,7 @@ Globals:
           UserPoolArn: !Ref CognitoUserPoolArn
 
 Resources:
+  # ==================== DYNAMODB TABLES ====================
 
   DevicesTable:
     Type: AWS::DynamoDB::Table
@@ -66,14 +67,24 @@ Resources:
       AttributeDefinitions:
         - AttributeName: observationId
           AttributeType: S
-        - AttributeName: userId
+        - AttributeName: deviceId
           AttributeType: S
         - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: userId
           AttributeType: S
       KeySchema:
         - AttributeName: observationId
           KeyType: HASH
       GlobalSecondaryIndexes:
+        - IndexName: DeviceIdIndex
+          KeySchema:
+            - AttributeName: deviceId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
         - IndexName: UserIdIndex
           KeySchema:
             - AttributeName: userId
@@ -83,15 +94,59 @@ Resources:
           Projection:
             ProjectionType: ALL
 
+  # ==================== S3 BUCKET ====================
+
   ImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'orions-eye-images-${Environment}-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
         BlockPublicPolicy: false
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
+
+  ImagesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImagesBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Sub '${ImagesBucket.Arn}/*'
+
+  # ==================== API LAMBDAS ====================
+
+  PresignUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-presign-upload-${Environment}'
+      CodeUri: lambda/presign_upload/
+      Handler: handler.lambda_handler
+      Policies:
+        - S3WritePolicy:
+            BucketName: !Ref ImagesBucket
+      Events:
+        Presign:
+          Type: Api
+          Properties:
+            Path: /observations/presign
+            Method: POST
 
   GetDevicesFunction:
     Type: AWS::Serverless::Function
@@ -109,16 +164,202 @@ Resources:
             Path: /devices
             Method: GET
 
+  RegisterDeviceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-register-device-${Environment}'
+      CodeUri: lambda/register_device/
+      Handler: handler.lambda_handler
+      Timeout: 60
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - iot:CreateThing
+                - iot:CreateKeysAndCertificate
+                - iot:AttachThingPrincipal
+                - iot:AttachPolicy
+                - iot:DescribeEndpoint
+              Resource: '*'
+      Events:
+        RegisterDevice:
+          Type: Api
+          Properties:
+            Path: /devices/register
+            Method: POST
+
+  SendDeviceCommandFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-send-command-${Environment}'
+      CodeUri: lambda/send_device_command/
+      Handler: handler.lambda_handler
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - iot-data:Publish
+              Resource: '*'
+      Events:
+        SendCommand:
+          Type: Api
+          Properties:
+            Path: /devices/{deviceId}/command
+            Method: POST
+
+  GetObservationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-get-observations-${Environment}'
+      CodeUri: lambda/get_observations/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ObservationsTable
+      Events:
+        GetObservations:
+          Type: Api
+          Properties:
+            Path: /observations
+            Method: GET
+
+  GetObservationDetailFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-get-observation-${Environment}'
+      CodeUri: lambda/get_observation_detail/
+      Handler: handler.lambda_handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ObservationsTable
+      Events:
+        GetObservation:
+          Type: Api
+          Properties:
+            Path: /observations/{observationId}
+            Method: GET
+
+  # ==================== PROCESSING + IOT ====================
+
+  ProcessSpectralImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-process-image-${Environment}'
+      CodeUri: lambda/process_spectral_image/
+      Handler: handler.lambda_handler
+      Timeout: 300
+      MemorySize: 2048
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ObservationsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - S3CrudPolicy:
+            BucketName: !Ref ImagesBucket
+
+  IoTRuleHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'orions-eye-iot-handler-${Environment}'
+      CodeUri: lambda/iot_rule_handler/
+      Handler: handler.lambda_handler
+      Timeout: 60
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DevicesTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ProcessSpectralImageFunction
+
+  IoTDevicePolicy:
+    Type: AWS::IoT::Policy
+    Properties:
+      PolicyName: OrionsEyeDevicePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Connect
+            Effect: Allow
+            Action:
+              - iot:Connect
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*'
+          - Sid: Publish
+            Effect: Allow
+            Action:
+              - iot:Publish
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/status'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/data'
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/image'
+          - Sid: Subscribe
+            Effect: Allow
+            Action:
+              - iot:Subscribe
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/orionseye/*/command'
+          - Sid: Receive
+            Effect: Allow
+            Action:
+              - iot:Receive
+            Resource:
+              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/command'
+
+  IoTRuleProcessImage:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'orions_eye_process_image_${Environment}'
+      TopicRulePayload:
+        RuleDisabled: false
+        AwsIotSqlVersion: '2016-03-23'
+        Sql: "SELECT *, topic() as topic FROM 'orionseye/+/image'"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt IoTRuleHandlerFunction.Arn
+
+  IoTRuleUpdateStatus:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'orions_eye_update_status_${Environment}'
+      TopicRulePayload:
+        RuleDisabled: false
+        AwsIotSqlVersion: '2016-03-23'
+        Sql: "SELECT *, topic() as topic FROM 'orionseye/+/status'"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt IoTRuleHandlerFunction.Arn
+
+  IoTRuleHandlerPermissionProcessImage:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IoTRuleHandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt IoTRuleProcessImage.Arn
+
+  IoTRuleHandlerPermissionUpdateStatus:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref IoTRuleHandlerFunction
+      Action: lambda:InvokeFunction
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt IoTRuleUpdateStatus.Arn
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
     Value: !Sub 'https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod'
-  
+
   DevicesTableName:
     Value: !Ref DevicesTable
-  
+
   ObservationsTableName:
     Value: !Ref ObservationsTable
-  
+
   ImagesBucketName:
     Value: !Ref ImagesBucket
+
+  IoTEndpoint:
+    Description: AWS IoT Core endpoint
+    Value: !Sub '${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com'

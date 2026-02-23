@@ -13,7 +13,7 @@ class AwsConfig {
    static const String s3Region = 'us-east-2';
 
    // API GATEWAY - APIs REST 
-   static const String apiEndpoint = 'https://c4cp36ywm6.execute-api.us-east-2.amazonaws.com/Prod';
+   static const String apiEndpoint = 'https://wovrlgy45g.execute-api.us-east-2.amazonaws.com/Prod';
 
    // IOT CORE - Comunicación con ESP32 (próximamente)
    static const String iotEndpoint = '';
