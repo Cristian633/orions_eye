@@ -1,0 +1,21 @@
+{
+    "files.associations": {
+        "*.ino": "cpp"
+    },
+    "C_Cpp.intelliSenseEngine": "Default",
+    "idf.adapterTargetName": "esp32",
+    "idf.customExtraPaths": "C:/Users/${env:USERNAME}/.platformio/packages/toolchain-xtensa-esp32/bin;C:/Users/${env:USERNAME}/.platformio/packages/tool-esptoolpy;C:/Users/${env:USERNAME}/.platformio/packages/tool-mkspiffs",
+    "idf.customExtraVars": {
+        "OPENOCD_SCRIPTS": "C:/Users/${env:USERNAME}/.platformio/packages/tool-openocd-esp32/share/openocd/scripts"
+    },
+    "idf.espIdfPath": "C:/Users/${env:USERNAME}/.platformio/packages/framework-espidf",
+    "idf.openOcdConfigs": [
+        "interface/ftdi/esp32_devkitj_v1.cfg",
+        "target/esp32.cfg"
+    ],
+    "idf.pythonBinPath": "C:/Users/${env:USERNAME}/.platformio/python3/python.exe",
+    "idf.toolsPath": "C:/Users/${env:USERNAME}/.platformio",
+    "terminal.integrated.env.windows": {
+        "PATH": "C:/Users/${env:USERNAME}/.platformio/penv/Scripts;C:/Users/${env:USERNAME}/.platformio/python3/Scripts;C:/Users/${env:USERNAME}/.platformio/python3;${env:PATH}"
+    }
+}
