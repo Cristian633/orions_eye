@@ -59,13 +59,78 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
   }
 
   Future<void> _connectToDevice(DiscoveredDevice device) async {
-    // TODO: Implementar conexión BLE real
-    // Por ahora, redirigir a WiFi setup
-    if (mounted) {
-      context.push('/wifi-setup', extra: {
-        'deviceId': device.id,
-        'deviceName': device.name,
-      });
+    // Mostrar diálogo de loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Conectando por Bluetooth...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      print('🔵 Conectando a: ${device.name} (${device.id})');
+      
+      // Conectar por BLE
+      final connection = _ble.connectToDevice(
+        id: device.id,
+        connectionTimeout: const Duration(seconds: 15),
+      );
+
+      await for (final state in connection) {
+        print('🔵 Estado BLE: ${state.connectionState}');
+        
+        if (state.connectionState == DeviceConnectionState.connected) {
+          print('✅ BLE Conectado exitosamente');
+          
+          if (mounted) {
+            Navigator.pop(context); // Cerrar loading
+            
+            // Ir a WiFi Setup con la información del dispositivo
+            context.push('/wifi-setup', extra: {
+              'deviceId': device.id,
+              'deviceName': device.name,
+              'bleConnected': true,
+            });
+          }
+          break;
+        } else if (state.connectionState == DeviceConnectionState.disconnected) {
+          print('❌ BLE Desconectado');
+          if (mounted) {
+            Navigator.pop(context); // Cerrar loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('❌ No se pudo conectar al dispositivo'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      print('❌ Error BLE: $e');
+      if (mounted) {
+        Navigator.pop(context); // Cerrar loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error al conectar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -125,63 +190,75 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
                         Icon(
                           Icons.bluetooth_disabled,
                           size: 80,
-                          color: Colors.white.withOpacity(0.3),
+                          color: Colors.white70,
                         ),
                         const SizedBox(height: 16),
                         Text(
                           _scanning
-                              ? 'Buscando...'
+                              ? 'Buscando dispositivos...'
                               : 'No se encontraron dispositivos',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                          style: const TextStyle(
+                            color: Colors.white70,
                             fontSize: 16,
                           ),
                         ),
-                        if (!_scanning) ...[
-                          const SizedBox(height: 16),
+                        const SizedBox(height: 16),
+                        if (!_scanning)
                           ElevatedButton.icon(
                             onPressed: _startScan,
                             icon: const Icon(Icons.refresh),
-                            label: const Text('Volver a buscar'),
+                            label: const Text('Buscar de nuevo'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.secondary,
+                            ),
                           ),
-                        ],
                       ],
                     ),
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _devices.length,
-                    itemBuilder: (context, i) {
-                      final device = _devices[i];
+                    itemBuilder: (context, index) {
+                      final device = _devices[index];
                       return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
                         child: ListTile(
                           leading: Icon(
-                            Icons.radar,
+                            Icons.bluetooth_connected,
                             color: AppTheme.secondary,
                             size: 32,
                           ),
                           title: Text(
-                            device.name.isNotEmpty ? device.name : 'Dispositivo sin nombre',
+                            device.name.isEmpty ? 'Dispositivo sin nombre' : device.name,
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          subtitle: Text(
-                            'ID: ${device.id}\nSeñal: ${device.rssi} dBm',
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.7),
-                              fontSize: 12,
-                            ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text(
+                                'ID: ${device.id.substring(0, 8)}...',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                              Text(
+                                'Señal: ${device.rssi} dBm',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
                           ),
-                          trailing: ElevatedButton(
-                            onPressed: () => _connectToDevice(device),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.secondary,
-                            ),
-                            child: const Text('Conectar'),
+                          trailing: const Icon(
+                            Icons.arrow_forward_ios,
+                            color: Colors.white70,
                           ),
+                          onTap: () => _connectToDevice(device),
                         ),
                       );
                     },

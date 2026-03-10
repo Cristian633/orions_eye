@@ -22,7 +22,8 @@ dependencies:
   flutter_reactive_ble: ^5.3.1
   permission_handler: ^11.3.0
   shelf: ^1.4.1
-  
+  share_plus: ^7.2.1
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:

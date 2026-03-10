@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
 import '../../config/theme.dart';
 import '../providers/observations_provider.dart';
 import '../providers/devices_provider.dart';
@@ -11,6 +15,119 @@ class ObservationDetailScreen extends ConsumerWidget {
     super.key,
     required this.observationId
   });
+
+  // ============================================================================
+  // FUNCIÓN DE DESCARGA
+  // ============================================================================
+  Future<void> _downloadImage(String imageUrl, BuildContext context) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Descargando imagen...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Descargar imagen
+      final response = await http.get(Uri.parse(imageUrl));
+      
+      if (response.statusCode == 200) {
+        // Obtener directorio de documentos (más compatible multiplataforma)
+        final directory = Platform.isAndroid
+            ? await getExternalStorageDirectory()
+            : await getApplicationDocumentsDirectory();
+        
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final filePath = '${directory!.path}/orionseye_$timestamp.jpg';
+        
+        // Guardar archivo
+        final file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Imagen guardada exitosamente'),
+              backgroundColor: Colors.green,
+              action: SnackBarAction(
+                label: 'Ver ruta',
+                textColor: Colors.white,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Ubicación'),
+                      content: Text(filePath),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+      } else {
+        throw Exception('Error al descargar: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(' Error al descargar: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // ============================================================================
+  // FUNCIÓN DE COMPARTIR
+  // ============================================================================
+  Future<void> _shareImage(String imageUrl, BuildContext context) async {
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Preparando para compartir...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+
+      // Descargar imagen temporalmente
+      final response = await http.get(Uri.parse(imageUrl));
+      
+      if (response.statusCode == 200) {
+        final directory = await getTemporaryDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final filePath = '${directory.path}/share_orionseye_$timestamp.jpg';
+        final file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        
+        // Compartir
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          text: 'Captura de Orion\'s Eye - Espectrómetro Astronómico',
+          subject: 'Observación astronómica',
+        );
+      } else {
+        throw Exception('Error al descargar: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(' Error al compartir: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref){
@@ -43,6 +160,19 @@ class ObservationDetailScreen extends ConsumerWidget {
           SliverAppBar(
             expandedHeight: 400,
             pinned: true,
+            // BOTONES AGREGADOS EN EL APPBAR
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.share),
+                tooltip: 'Compartir',
+                onPressed: () => _shareImage(observation.imageUrl, context),
+              ),
+              IconButton(
+                icon: const Icon(Icons.download),
+                tooltip: 'Descargar',
+                onPressed: () => _downloadImage(observation.imageUrl, context),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Image.network(
                 observation.imageUrl,
@@ -128,17 +258,12 @@ class ObservationDetailScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 32),
 
-                  // botones de accion
+                  //  BOTONES ACTUALIZADOS CON FUNCIONALIDAD REAL
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: (){
-                            // TODO: compartir imagen
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Función de compartir próximamente")),
-                            );
-                          },
+                          onPressed: () => _shareImage(observation.imageUrl, context),
                           icon: const Icon(Icons.share),
                           label: const Text("Compartir"),
                           style: OutlinedButton.styleFrom(
@@ -151,12 +276,7 @@ class ObservationDetailScreen extends ConsumerWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: ElevatedButton.icon(
-                          onPressed: (){
-                            // TODO: Descargar imagen
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Función de descargar próximamente")),
-                            );
-                          },
+                          onPressed: () => _downloadImage(observation.imageUrl, context),
                           icon: const Icon(Icons.download),
                           label: const Text("Descargar"),
                           style: ElevatedButton.styleFrom(

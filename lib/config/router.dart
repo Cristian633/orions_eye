@@ -65,9 +65,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'wifi-setup',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          return WifiSetupScreen(
-            deviceId: extra?['deviceId'],
-            deviceExtra: extra,
+          return WiFiSetupScreen(
+            deviceExtra: extra ?? {},
           );
         },
       ),
