@@ -53,7 +53,7 @@ def lambda_handler(event, context):
         attributes = {
             "deviceName": device_name,
             "userId": str(user_id),
-            "deviceType": "ESP32-CAM"
+            "deviceType": "ESP32-CAM"x
 }
 
 

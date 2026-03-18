@@ -33,7 +33,7 @@
 // CONFIGURACIÓN AWS IoT Core (MQTT)
 // ============================================================================
 
-#define AWS_IOT_ENDPOINT "a3kjpfhb0sgn22-ats.iot.us-east-2.amazonaws.com"  // 
+#define AWS_IOT_ENDPOINT "219282777127.iot.us-east-2.amazonaws.com"  // 
 #define AWS_IOT_PORT 8883
 
 // Topics MQTT

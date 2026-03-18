@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../config/theme.dart';
+import '../../config/constants.dart';
 
 class BluetoothScanScreen extends ConsumerStatefulWidget {
   const BluetoothScanScreen({super.key});
@@ -16,16 +17,99 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
   final _ble = FlutterReactiveBle();
   final List<DiscoveredDevice> _devices = [];
   bool _scanning = false;
+  bool _showInstructions = true;
 
   @override
   void initState() {
     super.initState();
     _checkPermissions();
-    _startScan(); // Auto-iniciar escaneo
+    // Mostrar instrucciones primero
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showSetupInstructions();
+    });
+  }
+
+  void _showSetupInstructions() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: AppTheme.secondary),
+            SizedBox(width: 12),
+            Text('Configuración inicial'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                AppStrings.firstTimeSetup,
+                style: TextStyle(fontSize: 14),
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.secondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppTheme.secondary),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.router, color: AppTheme.secondary, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Activar HOTSPOT ahora:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.secondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '• Android: Ajustes → Conexiones → Zona WiFi\n'
+                      '• iOS: Ajustes → Compartir Internet',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.go('/dashboard');
+            },
+            child: Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startScan();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.secondary,
+            ),
+            child: Text('Ya activé el HOTSPOT'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _checkPermissions() async {
-    // Android 12+ necesita múltiples permisos
     await [
       Permission.bluetooth,
       Permission.bluetoothScan,
@@ -38,10 +122,10 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
     setState(() {
       _devices.clear();
       _scanning = true;
+      _showInstructions = false;
     });
 
     _ble.scanForDevices(withServices: []).listen((device) {
-      // Filtrar solo dispositivos "OrionsEye"
       if (device.name.contains('OrionsEye') || device.name.contains('ESP32')) {
         if (!_devices.any((d) => d.id == device.id)) {
           setState(() => _devices.add(device));
@@ -49,7 +133,7 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
       }
     });
 
-    Future.delayed(const Duration(seconds: 10), () {
+    Future.delayed(const Duration(seconds: 15), () {
       if (mounted) setState(() => _scanning = false);
     });
   }
@@ -59,11 +143,10 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
   }
 
   Future<void> _connectToDevice(DiscoveredDevice device) async {
-    // Mostrar diálogo de loading
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(
+      builder: (context) => Center(
         child: Card(
           child: Padding(
             padding: EdgeInsets.all(24.0),
@@ -73,6 +156,11 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
                 CircularProgressIndicator(),
                 SizedBox(height: 16),
                 Text('Conectando por Bluetooth...'),
+                SizedBox(height: 8),
+                Text(
+                  'Espera unos segundos',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
               ],
             ),
           ),
@@ -83,7 +171,6 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
     try {
       print('🔵 Conectando a: ${device.name} (${device.id})');
       
-      // Conectar por BLE
       final connection = _ble.connectToDevice(
         id: device.id,
         connectionTimeout: const Duration(seconds: 15),
@@ -96,9 +183,9 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
           print('✅ BLE Conectado exitosamente');
           
           if (mounted) {
-            Navigator.pop(context); // Cerrar loading
+            Navigator.pop(context);
             
-            // Ir a WiFi Setup con la información del dispositivo
+            // Ir a WiFi Setup
             context.push('/wifi-setup', extra: {
               'deviceId': device.id,
               'deviceName': device.name,
@@ -109,11 +196,16 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
         } else if (state.connectionState == DeviceConnectionState.disconnected) {
           print('❌ BLE Desconectado');
           if (mounted) {
-            Navigator.pop(context); // Cerrar loading
+            Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('❌ No se pudo conectar al dispositivo'),
+              SnackBar(
+                content: Text('❌ No se pudo conectar. Intenta de nuevo'),
                 backgroundColor: Colors.red,
+                action: SnackBarAction(
+                  label: 'Reintentar',
+                  textColor: Colors.white,
+                  onPressed: () => _connectToDevice(device),
+                ),
               ),
             );
           }
@@ -123,10 +215,10 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
     } catch (e) {
       print('❌ Error BLE: $e');
       if (mounted) {
-        Navigator.pop(context); // Cerrar loading
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error al conectar: $e'),
+            content: Text('❌ Error: Asegúrate de estar cerca del espectrómetro'),
             backgroundColor: Colors.red,
           ),
         );
@@ -138,46 +230,60 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Buscar Orion\'s Eye'),
+        title: const Text('Conectar Espectrómetro'),
         actions: [
           IconButton(
             icon: Icon(_scanning ? Icons.stop : Icons.refresh),
             onPressed: _scanning ? _stopScan : _startScan,
-          )
+            tooltip: _scanning ? 'Detener búsqueda' : 'Buscar de nuevo',
+          ),
+          IconButton(
+            icon: Icon(Icons.help_outline),
+            onPressed: _showSetupInstructions,
+            tooltip: 'Ver instrucciones',
+          ),
         ],
       ),
       body: Column(
         children: [
           if (_scanning)
-            const LinearProgressIndicator(),
+            LinearProgressIndicator(color: AppTheme.secondary),
           
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Icon(
-                      _scanning ? Icons.bluetooth_searching : Icons.bluetooth,
-                      color: AppTheme.secondary,
-                      size: 32,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Text(
-                        _scanning
-                            ? 'Buscando dispositivos...'
-                            : '${_devices.length} dispositivos encontrados',
-                        style: const TextStyle(
+          // Banner de instrucciones
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16),
+            color: AppTheme.secondary.withOpacity(0.1),
+            child: Row(
+              children: [
+                Icon(Icons.router, color: AppTheme.secondary),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _scanning 
+                          ? 'Buscando espectrómetro...'
+                          : '${_devices.length} espectrómetros encontrados',
+                        style: TextStyle(
                           fontSize: 16,
+                          fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 4),
+                      Text(
+                        '📱 Asegúrate de tener el HOTSPOT activado',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
           
@@ -188,77 +294,110 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.bluetooth_disabled,
-                          size: 80,
-                          color: Colors.white70,
+                          _scanning ? Icons.bluetooth_searching : Icons.bluetooth_disabled,
+                          size: 100,
+                          color: Colors.white30,
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 24),
                         Text(
                           _scanning
-                              ? 'Buscando dispositivos...'
-                              : 'No se encontraron dispositivos',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 16,
+                              ? 'Buscando espectrómetros...'
+                              : 'No se encontraron espectrómetros',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 8),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 32),
+                          child: Text(
+                            'Verifica que:\n'
+                            '• El espectrómetro esté encendido\n'
+                            '• Estés cerca del dispositivo (< 5 metros)\n'
+                            '• El Bluetooth esté activado',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        SizedBox(height: 32),
                         if (!_scanning)
                           ElevatedButton.icon(
                             onPressed: _startScan,
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Buscar de nuevo'),
+                            icon: Icon(Icons.refresh),
+                            label: Text('Buscar de nuevo'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.secondary,
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 32,
+                                vertical: 16,
+                              ),
                             ),
                           ),
                       ],
                     ),
                   )
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: EdgeInsets.all(16),
                     itemCount: _devices.length,
                     itemBuilder: (context, index) {
                       final device = _devices[index];
                       return Card(
+                        margin: EdgeInsets.only(bottom: 12),
                         child: ListTile(
-                          leading: Icon(
-                            Icons.bluetooth_connected,
-                            color: AppTheme.secondary,
-                            size: 32,
+                          contentPadding: EdgeInsets.all(16),
+                          leading: Container(
+                            padding: EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.secondary.withOpacity(0.2),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.radar,
+                              color: AppTheme.secondary,
+                              size: 32,
+                            ),
                           ),
                           title: Text(
-                            device.name.isEmpty ? 'Dispositivo sin nombre' : device.name,
-                            style: const TextStyle(
+                            device.name.isEmpty ? 'Espectrómetro' : device.name,
+                            style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
                           ),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 4),
+                              SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.signal_cellular_alt, size: 16, color: Colors.white70),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'Señal: ${device.rssi} dBm',
+                                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 4),
                               Text(
                                 'ID: ${device.id.substring(0, 8)}...',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              Text(
-                                'Señal: ${device.rssi} dBm',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                ),
+                                style: TextStyle(color: Colors.white54, fontSize: 11),
                               ),
                             ],
                           ),
-                          trailing: const Icon(
-                            Icons.arrow_forward_ios,
-                            color: Colors.white70,
+                          trailing: ElevatedButton(
+                            onPressed: () => _connectToDevice(device),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.secondary,
+                            ),
+                            child: Text('Conectar'),
                           ),
-                          onTap: () => _connectToDevice(device),
                         ),
                       );
                     },

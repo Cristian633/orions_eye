@@ -1,325 +1,115 @@
+import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
+
+import '../../config/constants.dart';
 import '../../domain/models/models.dart';
-import '../../data/services/device_service.dart';
+import 'auth_provider.dart';
 
-// Provider del servicio de dispositivos
-final deviceServiceProvider = Provider((ref) => DeviceService());
-
-// Provider que maneja la lista de observaciones
-final observationProvider = StateNotifierProvider<ObservationNotifier, List<Observation>>((ref) {
-  return ObservationNotifier();
+/// Provider principal (MISMO NOMBRE), ahora es AsyncValue para producción
+final observationProvider =
+    StateNotifierProvider<ObservationNotifier, AsyncValue<List<Observation>>>((ref) {
+  return ObservationNotifier(ref);
 });
 
-// Notifier que maneja el estado y las acciones de las observaciones
-class ObservationNotifier extends StateNotifier<List<Observation>> {
-  ObservationNotifier() : super(_initialObservations);
+class ObservationNotifier extends StateNotifier<AsyncValue<List<Observation>>> {
+  final Ref ref;
 
-  // Datos temporales (después vendrán del backend)
-  static final _initialObservations = [
-    Observation(
-      id: 'obs-1',
-      deviceId: 'device-1',
-      userId: 'user-1',
-      imageUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?w=800',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?w=400',
-      position: const DevicePosition(
-        rightAscension: '12h 34m 56s',
-        declination: '+45° 23\' 56"',
-        altitude: 45.5,
-        azimuth: 120.0,
-      ),
-      capturedAt: DateTime.now().subtract(const Duration(hours: 2)),
-      metadata: const ObservationMetadata(
-        exposureTime: 30.0,
-        iso: 800,
-        filter: 'h-alpha',
-        temperature: -10.5,
-      ),
-    ),
-    Observation(
-      id: 'obs-2',
-      deviceId: 'device-1',
-      userId: 'user-1',
-      imageUrl: 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=800',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=400',
-      position: const DevicePosition(
-        rightAscension: '5h 35m 17s',
-        declination: '-5° 23\' 28"',
-        altitude: 60.2,
-        azimuth: 180.5,
-      ),
-      capturedAt: DateTime.now().subtract(const Duration(days: 1)),
-      metadata: const ObservationMetadata(
-        exposureTime: 60.0,
-        iso: 1600,
-        filter: 'RGB',
-        temperature: -12.0,
-      ),
-    ),
-    Observation(
-      id: 'obs-3',
-      deviceId: 'device-2',
-      userId: 'user-1',
-      imageUrl: 'https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=800',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1502134249126-9f3755a50d78?w=400',
-      position: const DevicePosition(
-        rightAscension: '18h 36m 56s',
-        declination: '+38° 47\' 01"',
-        altitude: 75.0,
-        azimuth: 90.0,
-      ),
-      capturedAt: DateTime.now().subtract(const Duration(days: 3)),
-      metadata: const ObservationMetadata(
-        exposureTime: 120.0,
-        iso: 3200,
-        filter: 'OIII',
-        temperature: -15.2,
-      ),
-    ),
-    Observation(
-      id: 'obs-4',
-      deviceId: 'device-1',
-      userId: 'user-1',
-      imageUrl: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=800',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?w=400',
-      position: const DevicePosition(
-        rightAscension: '20h 41m 25s',
-        declination: '+45° 16\' 49"',
-        altitude: 50.3,
-        azimuth: 200.0,
-      ),
-      capturedAt: DateTime.now().subtract(const Duration(days: 5)),
-      metadata: const ObservationMetadata(
-        exposureTime: 90.0,
-        iso: 1600,
-        filter: 'Luminance',
-        temperature: -8.5,
-      ),
-    ),
-    Observation(
-      id: 'obs-5',
-      deviceId: 'device-3',
-      userId: 'user-1',
-      imageUrl: 'https://images.unsplash.com/photo-1464802686167-b939a6910659?w=800',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1464802686167-b939a6910659?w=400',
-      position: const DevicePosition(
-        rightAscension: '6h 45m 08s',
-        declination: '-16° 42\' 58"',
-        altitude: 35.8,
-        azimuth: 150.0,
-      ),
-      capturedAt: DateTime.now().subtract(const Duration(days: 7)),
-      metadata: const ObservationMetadata(
-        exposureTime: 45.0,
-        iso: 800,
-        filter: 'RGB',
-        temperature: -9.0,
-      ),
-    ),
-    Observation(
-      id: 'obs-6',
-      deviceId: 'device-1',
-      userId: 'user-1',
-      imageUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800',
-      thumbnailUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400',
-      position: const DevicePosition(
-        rightAscension: '1h 33m 50s',
-        declination: '+30° 39\' 36"',
-        altitude: 42.0,
-        azimuth: 270.0,
-      ),
-      capturedAt: DateTime.now().subtract(const Duration(days: 10)),
-      metadata: const ObservationMetadata(
-        exposureTime: 180.0,
-        iso: 3200,
-        filter: 'H-alpha',
-        temperature: -18.0,
-      ),
-    ),
-  ];
-
-  // Método para agregar una nueva observación
-  void addObservation(Observation observation) {
-    state = [observation, ...state]; // Agregar al inicio
+  ObservationNotifier(this.ref) : super(const AsyncValue.loading()) {
+    loadObservations();
   }
 
-  // Método para eliminar una observación
-  void removeObservation(String observationId) {
-    state = state.where((obs) => obs.id != observationId).toList();
-  }
-
-  // Método para obtener las observaciones de un dispositivo específico
-  List<Observation> getObservationsByDevice(String deviceId) {
-    return state.where((obs) => obs.deviceId == deviceId).toList();
-  }
-
-  // ✨ NUEVO: Método para refrescar desde el backend
-  Future<void> refreshObservations(String userId) async {
+  /// Carga inicial (producción)
+  Future<void> loadObservations() async {
+    state = const AsyncValue.loading();
     try {
-      print('🔄 Refrescando observaciones desde backend...');
-      
-      final deviceService = DeviceService();
-      final data = await deviceService.getObservations(userId);
-      
-      if (data.isNotEmpty) {
-        // Parsear observaciones del backend
-        final backendObservations = data.map((json) {
-          try {
-            return Observation(
-              id: json['observationId'] ?? json['id'] ?? '',
-              deviceId: json['deviceId'] ?? '',
-              userId: json['userId'] ?? userId,
-              imageUrl: json['imageUrl'] ?? '',
-              thumbnailUrl: json['thumbnailUrl'] ?? json['imageUrl'] ?? '',
-              capturedAt: DateTime.tryParse(json['timestamp'] ?? json['createdAt'] ?? '') ?? DateTime.now(),
-              position: DevicePosition(
-                rightAscension: json['position']?['ra'] ?? '00h 00m 00s',
-                declination: json['position']?['dec'] ?? '+00° 00\' 00"',
-                altitude: json['position']?['altitude']?.toDouble(),
-                azimuth: json['position']?['azimuth']?.toDouble(),
-              ),
-              metadata: json['metadata'] != null
-                  ? ObservationMetadata(
-                      exposureTime: json['metadata']['exposureTime']?.toDouble(),
-                      iso: json['metadata']['iso'],
-                      filter: json['metadata']['filter'],
-                      temperature: json['metadata']['temperature']?.toDouble(),
-                    )
-                  : null,
-            );
-          } catch (e) {
-            print('⚠️ Error parseando observación: $e');
-            return null;
-          }
-        }).whereType<Observation>().toList();
-
-        // Combinar con observaciones locales (mock)
-        // Puedes decidir si quieres solo backend o combinar:
-        
-        // Opción 1: Solo backend
-        // state = backendObservations;
-        
-        // Opción 2: Combinar (backend + mock sin duplicados)
-        final allObservations = [...backendObservations];
-        for (var mockObs in _initialObservations) {
-          if (!allObservations.any((obs) => obs.id == mockObs.id)) {
-            allObservations.add(mockObs);
-          }
-        }
-        state = allObservations;
-        
-        print('✅ ${backendObservations.length} observaciones cargadas desde backend');
-      } else {
-        print('ℹ️ No hay observaciones en el backend, usando datos mock');
-        state = _initialObservations;
+      final token = await ref.read(authProvider.notifier).getIdToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No hay token de autenticación. Inicia sesión de nuevo.');
       }
-    } catch (e) {
-      print('❌ Error refrescando observaciones: $e');
-      // Mantener observaciones actuales en caso de error
+
+      final res = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/observations'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (res.statusCode != 200) {
+        throw Exception('GET /observations failed: ${res.statusCode} ${res.body}');
+      }
+
+      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+      final items = (decoded['observations'] ?? []) as List<dynamic>;
+
+      final observations = items
+          .map((e) => _fromApi(e as Map<String, dynamic>))
+          .toList();
+
+      state = AsyncValue.data(observations);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
     }
   }
 
-  // ✨ NUEVO: Cargar observaciones desde backend (reemplaza todas)
-  Future<void> loadFromBackend(String userId) async {
-    try {
-      final deviceService = DeviceService();
-      final data = await deviceService.getObservations(userId);
-      
-      final observations = data.map((json) {
-        try {
-          return Observation(
-            id: json['observationId'] ?? json['id'] ?? '',
-            deviceId: json['deviceId'] ?? '',
-            userId: json['userId'] ?? userId,
-            imageUrl: json['imageUrl'] ?? '',
-            thumbnailUrl: json['thumbnailUrl'] ?? json['imageUrl'] ?? '',
-            capturedAt: DateTime.tryParse(json['timestamp'] ?? json['createdAt'] ?? '') ?? DateTime.now(),
-            position: DevicePosition(
-              rightAscension: json['position']?['ra'] ?? '00h 00m 00s',
-              declination: json['position']?['dec'] ?? '+00° 00\' 00"',
-              altitude: json['position']?['altitude']?.toDouble(),
-              azimuth: json['position']?['azimuth']?.toDouble(),
+  /// Refrescar (lo usa Gallery)
+  Future<void> refreshObservations(String _userIdIgnored) async {
+    // En producción NO necesitamos userId aquí porque el backend debe sacar el user desde Cognito.
+    await loadObservations();
+  }
+
+  Observation _fromApi(Map<String, dynamic> json) {
+    final id = (json['observationId'] ?? json['id'] ?? '').toString();
+    final deviceId = (json['deviceId'] ?? '').toString();
+    final userId = (json['userId'] ?? '').toString();
+
+    final imageUrl = (json['imageUrl'] ?? '').toString();
+    final thumbnailUrl = (json['thumbnailUrl'] ?? json['imageUrl'] ?? '').toString();
+
+    final capturedAtRaw = (json['timestamp'] ?? json['createdAt'] ?? '').toString();
+    final capturedAt = DateTime.tryParse(capturedAtRaw) ?? DateTime.now();
+
+    final pos = (json['position'] as Map?)?.cast<String, dynamic>();
+    final meta = (json['metadata'] as Map?)?.cast<String, dynamic>();
+
+    return Observation(
+      id: id,
+      deviceId: deviceId,
+      userId: userId,
+      imageUrl: imageUrl,
+      thumbnailUrl: thumbnailUrl,
+      capturedAt: capturedAt,
+      position: DevicePosition(
+        rightAscension: (pos?['ra'] ?? '00h 00m 00s').toString(),
+        declination: (pos?['dec'] ?? '+00° 00\' 00"').toString(),
+        altitude: (pos?['altitude'] as num?)?.toDouble(),
+        azimuth: (pos?['azimuth'] as num?)?.toDouble(),
+      ),
+      metadata: meta == null
+          ? null
+          : ObservationMetadata(
+              exposureTime: (meta['exposureTime'] as num?)?.toDouble(),
+              iso: meta['iso'],
+              filter: meta['filter'],
+              temperature: (meta['temperature'] as num?)?.toDouble(),
             ),
-            metadata: json['metadata'] != null
-                ? ObservationMetadata(
-                    exposureTime: json['metadata']['exposureTime']?.toDouble(),
-                    iso: json['metadata']['iso'],
-                    filter: json['metadata']['filter'],
-                    temperature: json['metadata']['temperature']?.toDouble(),
-                  )
-                : null,
-          );
-        } catch (e) {
-          return null;
-        }
-      }).whereType<Observation>().toList();
-
-      if (observations.isNotEmpty) {
-        state = observations;
-      }
-    } catch (e) {
-      print('Error cargando observaciones: $e');
-    }
+    );
   }
 }
 
-// Provider derivado: observación específica por ID
+/// Provider derivado: observación por ID
 final observationByIdProvider = Provider.family<Observation?, String>((ref, observationId) {
-  final observations = ref.watch(observationProvider);
-  try {
-    return observations.firstWhere((obs) => obs.id == observationId);
-  } catch (e) {
-    return null;
-  }
-});
+  final observationsState = ref.watch(observationProvider);
 
-// ✨ NUEVO: Provider para cargar observaciones del backend
-final observationsFromBackendProvider = FutureProvider.family<List<Observation>, String>((ref, userId) async {
-  final deviceService = ref.read(deviceServiceProvider);
-  
-  try {
-    final data = await deviceService.getObservations(userId);
-    
-    return data.map((json) {
+  return observationsState.maybeWhen(
+    data: (list) {
       try {
-        return Observation(
-          id: json['observationId'] ?? json['id'] ?? '',
-          deviceId: json['deviceId'] ?? '',
-          userId: json['userId'] ?? userId,
-          imageUrl: json['imageUrl'] ?? '',
-          thumbnailUrl: json['thumbnailUrl'] ?? json['imageUrl'] ?? '',
-          capturedAt: DateTime.tryParse(json['timestamp'] ?? json['createdAt'] ?? '') ?? DateTime.now(),
-          position: DevicePosition(
-            rightAscension: json['position']?['ra'] ?? '00h 00m 00s',
-            declination: json['position']?['dec'] ?? '+00° 00\' 00"',
-            altitude: json['position']?['altitude']?.toDouble(),
-            azimuth: json['position']?['azimuth']?.toDouble(),
-          ),
-          metadata: json['metadata'] != null
-              ? ObservationMetadata(
-                  exposureTime: json['metadata']['exposureTime']?.toDouble(),
-                  iso: json['metadata']['iso'],
-                  filter: json['metadata']['filter'],
-                  temperature: json['metadata']['temperature']?.toDouble(),
-                )
-              : null,
-        );
-      } catch (e) {
-        print('Error parseando observación: $e');
+        return list.firstWhere((o) => o.id == observationId);
+      } catch (_) {
         return null;
       }
-    }).whereType<Observation>().toList();
-  } catch (e) {
-    print('Error cargando observaciones del backend: $e');
-    return [];
-  }
-});
-
-// ✨ NUEVO: Provider para auto-refresh cada 30 segundos
-final autoRefreshObservationsProvider = StreamProvider.family<int, String>((ref, userId) {
-  return Stream.periodic(const Duration(seconds: 30), (count) {
-    // Refrescar observaciones cada 30 segundos
-    ref.read(observationProvider.notifier).refreshObservations(userId);
-    return count;
-  });
+    },
+    orElse: () => null,
+  );
 });

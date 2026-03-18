@@ -15,6 +15,10 @@ class ProfileScreen extends ConsumerWidget {
     final user = ref.watch(authProvider);
     final devices = ref.watch(devicesProvider);
     final observations = ref.watch(observationProvider);
+    final observationCount = observations.maybeWhen(
+      data: (items) => items.length,
+      orElse: () => 0,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -101,7 +105,7 @@ class ProfileScreen extends ConsumerWidget {
                       _buildStatItem(
                         icon: Icons.photo_library,
                         label: 'Observaciones',
-                        value: observations.length.toString(),
+                        value: observationCount.toString(),
                       ),
                       Container(
                         width: 1,
