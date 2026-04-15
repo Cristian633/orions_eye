@@ -12,15 +12,17 @@ import '../presentation/screens/verify_email_screen.dart';
 import '../presentation/screens/welcome_screen.dart';
 import '../presentation/screens/bluetooth_scan_screen.dart';
 import '../presentation/screens/wifi_setup_screen.dart';
-import '../presentation/screens/device_setup_success_screen.dart';  //  NUEVO
-import '../presentation/screens/device_connecting_screen.dart';      // NUEVO
+import '../presentation/screens/device_setup_success_screen.dart';
+import '../presentation/screens/device_connecting_screen.dart';
+
+//  NUEVO: pantalla de tips “Modo Campo”
+import '../presentation/screens/field_mode_tips_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final isAuthenticated = ref.watch(isAuthenticatedProvider);
 
   return GoRouter(
     initialLocation: '/welcome',
-    
     redirect: (context, state) {
       final isLoggingIn = state.matchedLocation == '/login';
       final isRegistering = state.matchedLocation == '/register';
@@ -28,16 +30,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isWelcome = state.matchedLocation == '/welcome';
       final isBluetoothScan = state.matchedLocation == '/bluetooth-scan';
       final isWifiSetup = state.matchedLocation == '/wifi-setup';
-      final isDeviceSetup = state.matchedLocation.startsWith('/device-setup');  // ✨ NUEVO
+      final isDeviceSetup = state.matchedLocation.startsWith('/device-setup');
 
-      if (!isAuthenticated && 
-          !isLoggingIn && 
-          !isRegistering && 
-          !isVerifying && 
+      // NUEVO: permitir tips de campo sin estar logueado (si quieres)
+      final isFieldModeTips = state.matchedLocation == '/field-mode-tips';
+
+      if (!isAuthenticated &&
+          !isLoggingIn &&
+          !isRegistering &&
+          !isVerifying &&
           !isWelcome &&
           !isBluetoothScan &&
           !isWifiSetup &&
-          !isDeviceSetup) {  // ✨ NUEVO
+          !isDeviceSetup &&
+          !isFieldModeTips) {
         return '/welcome';
       }
 
@@ -53,13 +59,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'welcome',
         builder: (context, state) => const WelcomeScreen(),
       ),
-      
+
+      // NUEVO: Ruta “Modo Campo / Tips”
+      GoRoute(
+        path: '/field-mode-tips',
+        name: 'field-mode-tips',
+        builder: (context, state) => const FieldModeTipsScreen(),
+      ),
+
       GoRoute(
         path: '/bluetooth-scan',
         name: 'bluetooth-scan',
         builder: (context, state) => const BluetoothScanScreen(),
       ),
-      
+
       GoRoute(
         path: '/wifi-setup',
         name: 'wifi-setup',
@@ -70,17 +83,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      
-      //  NUEVAS RUTAS
+
       GoRoute(
         path: '/device-connecting',
         name: 'device-connecting',
         builder: (context, state) {
-          final deviceName = (state.extra as Map<String, dynamic>?)?['deviceName'] ?? 'Dispositivo';
+          final deviceName =
+              (state.extra as Map<String, dynamic>?)?['deviceName'] ?? 'Dispositivo';
           return DeviceConnectingScreen(deviceName: deviceName);
         },
       ),
-      
+
       GoRoute(
         path: '/device-setup-success',
         name: 'device-setup-success',
@@ -89,7 +102,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           return DeviceSetupSuccessScreen(extra: extra);
         },
       ),
-      
+
       GoRoute(
         path: '/login',
         name: 'login',

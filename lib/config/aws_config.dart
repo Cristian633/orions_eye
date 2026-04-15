@@ -4,17 +4,18 @@ class AwsConfig {
   static const String clientId = '6irncagskoghm3h02mie6bin0v';
   static const String region = 'us-east-2';
 
-   // DYNAMODB - Base de datos (próximamente)
-   static const String devicesTableName = 'orions-eye-devices';
-   static const String observationsTableName = 'orions-eye-observations';
+  // API GATEWAY - APIs REST
+  static const String apiEndpoint =
+      'https://wovrlgy45g.execute-api.us-east-2.amazonaws.com/Prod';
 
-   // S3 - Almacenamiento de imágenes (próximamente)
-   static const String s3BucketName = 'orions-eye-observations';
-   static const String s3Region = 'us-east-2';
+  // Estos nombres son informativos (la app normalmente NO los usa directo)
+  // Los saco de tus Outputs del stack orions-eye-backend-dev:
+  static const String devicesTableName = 'orions-eye-devices-dev';
+  static const String observationsTableName = 'orions-eye-observations-dev';
+  static const String s3BucketName = 'orions-eye-images-dev-219282777127';
+  static const String s3Region = 'us-east-2';
 
-   // API GATEWAY - APIs REST 
-   static const String apiEndpoint = 'https://wovrlgy45g.execute-api.us-east-2.amazonaws.com/Prod';
-
-   // IOT CORE - Comunicación con ESP32 (próximamente)
-   static const String iotEndpoint = '';
+  // IoT Core (para el ESP32). Mejor usar Data-ATS.
+  // Por ahora te dejo el de CloudFormation:
+  static const String iotEndpoint = '219282777127.iot.us-east-2.amazonaws.com';
 }

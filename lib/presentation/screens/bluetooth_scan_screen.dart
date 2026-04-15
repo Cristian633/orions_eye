@@ -169,7 +169,7 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
     );
 
     try {
-      print('🔵 Conectando a: ${device.name} (${device.id})');
+      print(' Conectando a: ${device.name} (${device.id})');
       
       final connection = _ble.connectToDevice(
         id: device.id,
@@ -177,10 +177,10 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
       );
 
       await for (final state in connection) {
-        print('🔵 Estado BLE: ${state.connectionState}');
+        print(' Estado BLE: ${state.connectionState}');
         
         if (state.connectionState == DeviceConnectionState.connected) {
-          print('✅ BLE Conectado exitosamente');
+          print(' BLE Conectado exitosamente');
           
           if (mounted) {
             Navigator.pop(context);
@@ -194,12 +194,12 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
           }
           break;
         } else if (state.connectionState == DeviceConnectionState.disconnected) {
-          print('❌ BLE Desconectado');
+          print(' BLE Desconectado');
           if (mounted) {
             Navigator.pop(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('❌ No se pudo conectar. Intenta de nuevo'),
+                content: Text(' No se pudo conectar. Intenta de nuevo'),
                 backgroundColor: Colors.red,
                 action: SnackBarAction(
                   label: 'Reintentar',
@@ -213,12 +213,12 @@ class _BluetoothScanScreenState extends ConsumerState<BluetoothScanScreen> {
         }
       }
     } catch (e) {
-      print('❌ Error BLE: $e');
+      print(' Error BLE: $e');
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error: Asegúrate de estar cerca del espectrómetro'),
+            content: Text(' Error: Asegúrate de estar cerca del espectrómetro'),
             backgroundColor: Colors.red,
           ),
         );

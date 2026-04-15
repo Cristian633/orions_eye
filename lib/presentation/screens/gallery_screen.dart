@@ -39,7 +39,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
         if (mounted && showToast) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('✅ Observaciones actualizadas'),
+              content: Text(' Observaciones actualizadas'),
               duration: Duration(seconds: 2),
               backgroundColor: Colors.green,
             ),
@@ -49,7 +49,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
         if (mounted && showToast) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('⚠️ Inicia sesión para ver observaciones'),
+              content: Text(' Inicia sesión para ver observaciones'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -59,7 +59,7 @@ class _GalleryScreenState extends ConsumerState<GalleryScreen> {
       if (mounted && showToast) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error actualizando: $e'),
+            content: Text(' Error actualizando: $e'),
             backgroundColor: Colors.red,
           ),
         );
