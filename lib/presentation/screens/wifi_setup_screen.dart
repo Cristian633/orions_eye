@@ -1,244 +1,214 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../data/services/device_service.dart';
 
-import '../../config/theme.dart';
-import '../providers/devices_provider.dart';
+class WifiSetupScreen extends StatefulWidget {
+  final String deviceId;
+  final String? deviceName;
+  final bool bleConnected;
+  final String userId;
 
-enum _SetupStep { idle, sendingWifi, connecting, done }
-
-class WiFiSetupScreen extends ConsumerStatefulWidget {
-  final Map<String, dynamic> deviceExtra;
-
-  const WiFiSetupScreen({
+  const WifiSetupScreen({
     super.key,
-    required this.deviceExtra,
+    required this.deviceId,
+    this.deviceName,
+    this.bleConnected = false,
+    required this.userId,
   });
 
   @override
-  ConsumerState<WiFiSetupScreen> createState() => _WiFiSetupScreenState();
+  State<WifiSetupScreen> createState() => _WifiSetupScreenState();
 }
 
-class _WiFiSetupScreenState extends ConsumerState<WiFiSetupScreen> {
+class _WifiSetupScreenState extends State<WifiSetupScreen> {
   final _ble = FlutterReactiveBle();
-  final _ssidController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _deviceService = DeviceService();
 
-  bool _obscurePassword = true;
-  _SetupStep _step = _SetupStep.idle;
-  String _statusText = '';
+  final _ssidCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
 
-  final serviceUuid = Uuid.parse("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
-  final ssidCharUuid = Uuid.parse("beb5483e-36e1-4688-b7f5-ea07361b26a8");
-  final passCharUuid = Uuid.parse("beb5483e-36e1-4688-b7f5-ea07361b26a9");
-  final statusCharUuid = Uuid.parse("beb5483e-36e1-4688-b7f5-ea07361b26aa");
+  bool _loading = false;
+  bool _connected = false;
+  String _status = "Listo para configurar WiFi";
 
-  bool get _isLoading => _step != _SetupStep.idle;
+  final Uuid serviceUuid = Uuid.parse("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
+  final Uuid ssidUuid = Uuid.parse("beb5483e-36e1-4688-b7f5-ea07361b26a8");
+  final Uuid passUuid = Uuid.parse("beb5483e-36e1-4688-b7f5-ea07361b26a9");
+
+  @override
+  void initState() {
+    super.initState();
+    _connected = widget.bleConnected;
+  }
 
   @override
   void dispose() {
-    _ssidController.dispose();
-    _passwordController.dispose();
+    _ssidCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _sendWiFiCredentials() async {
-    if (_ssidController.text.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('❌ Por favor ingresa el SSID')));
-      return;
+  Future<void> _ensureConnected() async {
+    if (_connected) return;
+
+    setState(() => _status = "Conectando BLE...");
+    await for (final update in _ble.connectToDevice(
+      id: widget.deviceId,
+      connectionTimeout: const Duration(seconds: 15),
+    )) {
+      if (update.connectionState == DeviceConnectionState.connected) {
+        _connected = true;
+        setState(() => _status = "BLE conectado");
+        break;
+      } else if (update.connectionState == DeviceConnectionState.disconnected) {
+        throw Exception("No se pudo conectar por BLE");
+      }
     }
-    if (_passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('❌ Por favor ingresa la contraseña')));
+  }
+
+  Future<void> _sendCredentialsAndRegister() async {
+    final ssid = _ssidCtrl.text.trim();
+    final pass = _passCtrl.text;
+
+    if (ssid.isEmpty || pass.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Ingresa SSID y contraseña")),
+      );
       return;
     }
 
-    final deviceId = widget.deviceExtra['deviceId'] as String;
-    final deviceName = (widget.deviceExtra['deviceName'] as String?) ?? 'Espectrómetro';
+    if (widget.userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No se encontró userId para registrar dispositivo")),
+      );
+      return;
+    }
+
+    setState(() => _loading = true);
 
     try {
-      setState(() {
-        _step = _SetupStep.sendingWifi;
-        _statusText = 'Enviando WiFi al espectrómetro...';
-      });
+      await _ensureConnected();
 
-      await _ble.writeCharacteristicWithResponse(
-        QualifiedCharacteristic(
-          serviceId: serviceUuid,
-          characteristicId: ssidCharUuid,
-          deviceId: deviceId,
-        ),
-        value: utf8.encode(_ssidController.text),
-      );
+      setState(() => _status = "Descubriendo servicios...");
+      final services = await _ble.discoverServices(widget.deviceId);
 
-      await Future.delayed(const Duration(milliseconds: 300));
+      bool foundService = false;
+      bool foundSsid = false;
+      bool foundPass = false;
 
-      await _ble.writeCharacteristicWithResponse(
-        QualifiedCharacteristic(
-          serviceId: serviceUuid,
-          characteristicId: passCharUuid,
-          deviceId: deviceId,
-        ),
-        value: utf8.encode(_passwordController.text),
-      );
-
-      setState(() {
-        _step = _SetupStep.connecting;
-        _statusText = 'Conectando a internet y registrando en la nube... (30–45s)';
-      });
-
-      // Registrar dispositivo en backend usando ApiService (Cognito)
-      final ok = await ref.read(devicesProvider.notifier).registerDevice(
-            deviceId: deviceId,
-            name: deviceName,
-          );
-
-      if (!ok) {
-        throw Exception('No se pudo registrar el dispositivo en el backend.');
+      for (final s in services) {
+        if (s.serviceId.toString().toLowerCase() == serviceUuid.toString().toLowerCase()) {
+          foundService = true;
+          for (final c in s.characteristics) {
+            final id = c.characteristicId.toString().toLowerCase();
+            if (id == ssidUuid.toString().toLowerCase()) foundSsid = true;
+            if (id == passUuid.toString().toLowerCase()) foundPass = true;
+          }
+        }
       }
 
-      // Esperar a que aparezca en /devices
-      await ref.read(devicesProvider.notifier).waitUntilDeviceOnline(deviceId);
+      if (!foundService || !foundSsid || !foundPass) {
+        throw Exception("No se encontraron UUIDs BLE esperados");
+      }
+
+      setState(() => _status = "Enviando SSID...");
+      await _ble.writeCharacteristicWithResponse(
+        QualifiedCharacteristic(
+          serviceId: serviceUuid,
+          characteristicId: ssidUuid,
+          deviceId: widget.deviceId,
+        ),
+        value: ssid.codeUnits,
+      );
+
+      await Future.delayed(const Duration(milliseconds: 250));
+
+      setState(() => _status = "Enviando contraseña...");
+      await _ble.writeCharacteristicWithResponse(
+        QualifiedCharacteristic(
+          serviceId: serviceUuid,
+          characteristicId: passUuid,
+          deviceId: widget.deviceId,
+        ),
+        value: pass.codeUnits,
+      );
+
+      setState(() => _status = "Credenciales enviadas ✅ Registrando dispositivo...");
+
+      await _deviceService.registerDevice(
+        deviceId: widget.deviceId,
+        userId: widget.userId,
+        deviceName: widget.deviceName ?? 'OrionSpectrometer',
+      );
 
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Dispositivo agregado a Mis dispositivos ✅")),
+      );
 
-      setState(() {
-        _step = _SetupStep.done;
-        _statusText = '✅ Listo. El espectrómetro ya está configurado.';
-      });
-
-      // Pantalla de éxito (ya existe en tu router)
-      context.go('/device-setup-success', extra: {
-        'deviceId': deviceId,
-        'deviceName': deviceName,
-      });
+      context.go('/dashboard');
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _step = _SetupStep.idle;
-        _statusText = '';
-      });
-
+      setState(() => _status = "Error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('❌ Error: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text("Error: $e")),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final deviceName = (widget.deviceExtra['deviceName'] as String?) ?? 'Dispositivo';
+    final deviceLabel = (widget.deviceName != null && widget.deviceName!.isNotEmpty)
+        ? widget.deviceName!
+        : widget.deviceId;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Configurar Internet')),
-      body: SingleChildScrollView(
+      appBar: AppBar(title: const Text("Configurar WiFi")),
+      body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.router, color: AppTheme.secondary, size: 40),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Conectado por Bluetooth',
-                              style: TextStyle(color: Colors.white70, fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text(deviceName,
-                              style: const TextStyle(
-                                  color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.bluetooth_connected, color: Colors.green),
-                  ],
-                ),
-              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text("Dispositivo: $deviceLabel"),
             ),
-            const SizedBox(height: 24),
-            const Text('WiFi / Hotspot',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            const Text(
-              'En el campo usa el Hotspot de tu teléfono (datos móviles).',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 16),
-
+            const SizedBox(height: 12),
             TextField(
-              controller: _ssidController,
-              enabled: !_isLoading,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'SSID',
-                labelStyle: const TextStyle(color: Colors.white70),
-                prefixIcon: const Icon(Icons.wifi, color: Colors.white70),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              controller: _ssidCtrl,
+              decoration: const InputDecoration(
+                labelText: "SSID",
+                border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 16),
-
+            const SizedBox(height: 12),
             TextField(
-              controller: _passwordController,
-              enabled: !_isLoading,
-              obscureText: _obscurePassword,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Contraseña',
-                labelStyle: const TextStyle(color: Colors.white70),
-                prefixIcon: const Icon(Icons.lock, color: Colors.white70),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off,
-                      color: Colors.white70),
-                  onPressed: _isLoading ? null : () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              controller: _passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: "Contraseña",
+                border: OutlineInputBorder(),
               ),
             ),
-
-            const SizedBox(height: 20),
-
-            if (_step == _SetupStep.sendingWifi || _step == _SetupStep.connecting)
-              Card(
-                color: AppTheme.surface.withOpacity(0.5),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(_statusText, style: const TextStyle(color: Colors.white70)),
-                      ),
-                    ],
-                  ),
-                ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
-
-            const SizedBox(height: 16),
-
-            ElevatedButton(
-              onPressed: _isLoading ? null : _sendWiFiCredentials,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.secondary,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Text(_status),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _loading ? null : _sendCredentialsAndRegister,
+                child: Text(_loading ? 'Procesando...' : 'Enviar y Registrar'),
               ),
-              child: Text(_isLoading ? 'Procesando...' : 'Enviar y conectar',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
           ],
         ),

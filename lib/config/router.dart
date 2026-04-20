@@ -73,23 +73,27 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const BluetoothScanScreen(),
       ),
 
-      GoRoute(
-        path: '/wifi-setup',
-        name: 'wifi-setup',
-        builder: (context, state) {
-          final extra = state.extra as Map<String, dynamic>?;
-          return WiFiSetupScreen(
-            deviceExtra: extra ?? {},
-          );
-        },
-      ),
+ GoRoute(
+  path: '/wifi-setup',
+  name: 'wifi-setup',
+  builder: (context, state) {
+    final extra = (state.extra as Map<String, dynamic>?) ?? {};
+
+    return WifiSetupScreen(
+      deviceId: (extra['deviceId'] as String?) ?? '',
+      deviceName: extra['deviceName'] as String?,
+      bleConnected: (extra['bleConnected'] as bool?) ?? false,
+      userId: (extra['userId'] as String?) ?? '',
+    );
+  },
+),
 
       GoRoute(
         path: '/device-connecting',
         name: 'device-connecting',
         builder: (context, state) {
           final deviceName =
-              (state.extra as Map<String, dynamic>?)?['deviceName'] ?? 'Dispositivo';
+    ((state.extra as Map<String, dynamic>?)?['deviceName'] as String?) ?? 'Dispositivo';
           return DeviceConnectingScreen(deviceName: deviceName);
         },
       ),

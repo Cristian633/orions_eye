@@ -24,6 +24,9 @@ dependencies:
   shelf: ^1.4.1
   share_plus: ^7.2.1
   path_provider: ^2.1.1
+  flutter_blue_plus: ^1.32.8
+
+  
 
 dev_dependencies:
   flutter_test:
