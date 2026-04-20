@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
 import 'package:go_router/go_router.dart';
@@ -88,10 +89,14 @@ class _WifiSetupScreenState extends State<WifiSetupScreen> {
     setState(() => _loading = true);
 
     try {
-      await _ensureConnected();
+      await _ensureConnected().timeout(const Duration(seconds: 15));
 
       setState(() => _status = "Descubriendo servicios...");
-      final services = await _ble.discoverServices(widget.deviceId);
+      final services = await _ble
+          .discoverServices(widget.deviceId)
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        throw TimeoutException("discoverServices timeout (10s)");
+      });
 
       bool foundService = false;
       bool foundSsid = false;
@@ -113,34 +118,42 @@ class _WifiSetupScreenState extends State<WifiSetupScreen> {
       }
 
       setState(() => _status = "Enviando SSID...");
-      await _ble.writeCharacteristicWithResponse(
-        QualifiedCharacteristic(
-          serviceId: serviceUuid,
-          characteristicId: ssidUuid,
-          deviceId: widget.deviceId,
-        ),
-        value: ssid.codeUnits,
-      );
+      await _ble
+          .writeCharacteristicWithResponse(
+            QualifiedCharacteristic(
+              serviceId: serviceUuid,
+              characteristicId: ssidUuid,
+              deviceId: widget.deviceId,
+            ),
+            value: ssid.codeUnits,
+          )
+          .timeout(const Duration(seconds: 8));
 
       await Future.delayed(const Duration(milliseconds: 250));
 
       setState(() => _status = "Enviando contraseña...");
-      await _ble.writeCharacteristicWithResponse(
-        QualifiedCharacteristic(
-          serviceId: serviceUuid,
-          characteristicId: passUuid,
-          deviceId: widget.deviceId,
-        ),
-        value: pass.codeUnits,
-      );
+      await _ble
+          .writeCharacteristicWithResponse(
+            QualifiedCharacteristic(
+              serviceId: serviceUuid,
+              characteristicId: passUuid,
+              deviceId: widget.deviceId,
+            ),
+            value: pass.codeUnits,
+          )
+          .timeout(const Duration(seconds: 8));
 
       setState(() => _status = "Credenciales enviadas ✅ Registrando dispositivo...");
 
-      await _deviceService.registerDevice(
-        deviceId: widget.deviceId,
-        userId: widget.userId,
-        deviceName: widget.deviceName ?? 'OrionSpectrometer',
-      );
+      final result = await _deviceService
+          .registerDevice(
+            deviceId: widget.deviceId,
+            userId: widget.userId,
+            deviceName: widget.deviceName ?? 'OrionSpectrometer',
+          )
+          .timeout(const Duration(seconds: 12));
+
+      debugPrint("REGISTER OK: $result");
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -148,11 +161,23 @@ class _WifiSetupScreenState extends State<WifiSetupScreen> {
       );
 
       context.go('/dashboard');
+    } on TimeoutException catch (e) {
+      if (!mounted) return;
+      setState(() => _status = "Timeout: ${e.message ?? 'operación tardó demasiado'}");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Timeout: ${e.message ?? 'operación tardó demasiado'}"),
+          backgroundColor: Colors.red,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _status = "Error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);

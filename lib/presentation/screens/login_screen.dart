@@ -39,8 +39,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (result['success'] == true && mounted) {
-      // 👇 Guardar userId para usarlo luego en bluetooth/wifi setup
-      // Ajusta esta extracción según el shape real de tu result.
+      final prefs = await SharedPreferences.getInstance();
+
+      // userId
       final userId = (result['userId'] ??
               result['user']?['id'] ??
               result['data']?['userId'] ??
@@ -48,8 +49,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           .toString();
 
       if (userId.isNotEmpty) {
-        final prefs = await SharedPreferences.getInstance();
         await prefs.setString('userId', userId);
+      }
+
+      // tokens para backend protegido
+      final accessToken = (result['accessToken'] ??
+              result['token'] ??
+              result['idToken'] ??
+              result['data']?['accessToken'] ??
+              '')
+          .toString();
+
+      final idToken = (result['idToken'] ??
+              result['data']?['idToken'] ??
+              '')
+          .toString();
+
+      if (accessToken.isNotEmpty) {
+        await prefs.setString('accessToken', accessToken);
+      }
+      if (idToken.isNotEmpty) {
+        await prefs.setString('idToken', idToken);
       }
 
       context.go('/dashboard');
@@ -108,7 +128,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     style: TextStyle(fontSize: 14, color: Colors.white),
                   ),
                   const SizedBox(height: 48),
-
                   TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
@@ -126,7 +145,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-
                   TextFormField(
                     controller: _passwordController,
                     obscureText: true,
@@ -144,7 +162,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 24),
-
                   ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
                     style: ElevatedButton.styleFrom(
@@ -164,7 +181,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                   ),
                   const SizedBox(height: 16),
-
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
