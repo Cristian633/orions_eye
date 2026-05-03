@@ -1,138 +1,237 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../config/constants.dart';
+import 'package:amazon_cognito_identity_dart_2/cognito.dart';
+import '../../config/aws_config.dart';
 
-class DeviceService {
-  final String baseUrl = ApiConstants.baseUrl;
+class AuthService {
+  late final CognitoUserPool _userPool;
+  CognitoUser? _cognitoUser;
+  CognitoUserSession? _session;
 
-  Future<Map<String, String>> _authHeaders() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    // ✅ Priorizar ID token (muchos authorizers de API Gateway/Cognito esperan este)
-    final token = prefs.getString('idToken') ??
-        prefs.getString('accessToken') ??
-        prefs.getString('token') ??
-        '';
-
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
-
-    if (token.isNotEmpty) {
-      headers['Authorization'] = 'Bearer $token';
-    }
-
-    // Debug útil (puedes quitar luego)
-    print('idToken exists: ${(prefs.getString('idToken') ?? '').isNotEmpty}');
-    print('accessToken exists: ${(prefs.getString('accessToken') ?? '').isNotEmpty}');
-    print('using token prefix: ${token.isNotEmpty ? token.substring(0, 20) : 'EMPTY'}');
-
-    return headers;
+  AuthService() {
+    _userPool = CognitoUserPool(
+      AwsConfig.userPoolId,
+      AwsConfig.clientId,
+    );
   }
 
-  /// Registra un nuevo dispositivo
-  Future<Map<String, dynamic>> registerDevice({
-    required String deviceId,
-    required String userId,
-    required String deviceName,
+  // Registrar nuevo usuario
+  Future<Map<String, dynamic>> register({
+    required String email,
+    required String password,
+    required String name,
   }) async {
     try {
-      final headers = await _authHeaders();
+      final userAttributes = [
+        AttributeArg(name: 'email', value: email),
+        AttributeArg(name: 'name', value: name),
+      ];
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/devices/register'),
-        headers: headers,
-        body: jsonEncode({
-          'deviceId': deviceId,
-          'userId': userId,
-          'deviceName': deviceName,
-        }),
+      final result = await _userPool.signUp(
+        email,
+        password,
+        userAttributes: userAttributes,
       );
 
-      print('REGISTER status: ${response.statusCode}');
-      print('REGISTER body: ${response.body}');
+      return {
+        'success': true,
+        'userId': result.userSub,
+        'confirmed': result.userConfirmed,
+      };
+    } catch (e) {
+      print('Error en registro: $e');
+      return {
+        'success': false,
+        'error': _parseError(e.toString()),
+      };
+    }
+  }
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
-      } else if (response.statusCode == 401) {
-        throw Exception('No autorizado (401). Inicia sesión nuevamente.');
+  // Confirmar usuario con código
+  Future<Map<String, dynamic>> confirmRegistration({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final cognitoUser = CognitoUser(email, _userPool);
+      final result = await cognitoUser.confirmRegistration(code);
+
+      if (result) {
+        return {
+          'success': true,
+          'message': 'Email verificado exitosamente',
+        };
       } else {
-        throw Exception('Error registrando dispositivo: ${response.statusCode}');
+        return {
+          'success': false,
+          'error': 'Código de verificación inválido',
+        };
       }
     } catch (e) {
-      throw Exception('Error: $e');
+      print('Error confirmando usuario: $e');
+
+      if (e.toString().contains('CodeMismatchException')) {
+        return {
+          'success': false,
+          'error': 'Código incorrecto. Verifica e intenta de nuevo.',
+        };
+      } else if (e.toString().contains('ExpiredCodeException')) {
+        return {
+          'success': false,
+          'error': 'El código ha expirado. Solicita uno nuevo.',
+        };
+      } else if (e.toString().contains('LimitExceededException')) {
+        return {
+          'success': false,
+          'error': 'Demasiados intentos. Intenta más tarde.',
+        };
+      } else {
+        return {
+          'success': false,
+          'error': _parseError(e.toString()),
+        };
+      }
     }
   }
 
-  /// Envía comando de captura al dispositivo
-  Future<bool> captureImage(String deviceId) async {
+  // Reenviar código de confirmación
+  Future<Map<String, dynamic>> resendConfirmationCode(String email) async {
     try {
-      final headers = await _authHeaders();
+      final cognitoUser = CognitoUser(email, _userPool);
+      await cognitoUser.resendConfirmationCode();
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/devices/$deviceId/command'),
-        headers: headers,
-        body: jsonEncode({
-          'command': 'capture',
-          'payload': {},
-        }),
-      );
-
-      print('CAPTURE status: ${response.statusCode}');
-      print('CAPTURE body: ${response.body}');
-
-      return response.statusCode == 200;
+      return {
+        'success': true,
+        'message': 'Código reenviado a tu email',
+      };
     } catch (e) {
-      print('Error enviando comando de captura: $e');
-      return false;
+      print('Error reenviando código: $e');
+      return {
+        'success': false,
+        'error': _parseError(e.toString()),
+      };
     }
   }
 
-  /// Obtiene el estado del dispositivo
-  Future<Map<String, dynamic>?> getDeviceStatus(String deviceId) async {
+  // Login
+  Future<Map<String, dynamic>> login({
+    required String email,
+    required String password,
+  }) async {
     try {
-      final headers = await _authHeaders();
+      _cognitoUser = CognitoUser(email, _userPool);
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/devices/$deviceId/status'),
-        headers: headers,
+      final authDetails = AuthenticationDetails(
+        username: email,
+        password: password,
       );
 
-      print('STATUS status: ${response.statusCode}');
-      print('STATUS body: ${response.body}');
+      _session = await _cognitoUser!.authenticateUser(authDetails);
 
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body) as Map<String, dynamic>;
+      if (_session == null || !_session!.isValid()) {
+        return {
+          'success': false,
+          'error': 'Sesión inválida',
+        };
       }
+
+      final attributes = await _cognitoUser!.getUserAttributes();
+      final userAttributes = <String, String>{};
+
+      if (attributes != null) {
+        for (final attr in attributes) {
+          if (attr.name != null && attr.value != null) {
+            userAttributes[attr.name!] = attr.value!;
+          }
+        }
+      }
+
+      return {
+        'success': true,
+        'userId': _session!.getIdToken().payload['sub'],
+        'email': userAttributes['email'] ?? email,
+        'name': userAttributes['name'] ?? '',
+        'idToken': _session!.getIdToken().getJwtToken(),
+        'accessToken': _session!.getAccessToken().getJwtToken(),
+        'refreshToken': _session!.getRefreshToken()?.getToken(),
+      };
+    } catch (e) {
+      print('Error en login: $e');
+      return {
+        'success': false,
+        'error': _parseError(e.toString()),
+      };
+    }
+  }
+
+  // Logout
+  Future<void> logout() async {
+    if (_cognitoUser != null) {
+      await _cognitoUser!.signOut();
+      _cognitoUser = null;
+      _session = null;
+    }
+  }
+
+  // Verificar sesión activa
+  Future<Map<String, dynamic>?> getCurrentUser() async {
+    try {
+      _cognitoUser = await _userPool.getCurrentUser();
+      if (_cognitoUser == null) return null;
+
+      _session = await _cognitoUser!.getSession();
+      if (_session == null || !_session!.isValid()) return null;
+
+      final attributes = await _cognitoUser!.getUserAttributes();
+      final userAttributes = <String, String>{};
+
+      if (attributes != null) {
+        for (final attr in attributes) {
+          if (attr.name != null && attr.value != null) {
+            userAttributes[attr.name!] = attr.value!;
+          }
+        }
+      }
+
+      return {
+        'userId': _session!.getIdToken().payload['sub'],
+        'email': userAttributes['email'] ?? '',
+        'name': userAttributes['name'] ?? '',
+        'idToken': _session!.getIdToken().getJwtToken(),
+        'accessToken': _session!.getAccessToken().getJwtToken(),
+        'refreshToken': _session!.getRefreshToken()?.getToken(),
+      };
+    } catch (e) {
+      print('Error obteniendo usuario actual: $e');
       return null;
+    }
+  }
+
+  // Token para API
+  Future<String?> getIdToken() async {
+    try {
+      if (_session == null || !_session!.isValid()) {
+        final userData = await getCurrentUser();
+        if (userData == null) return null;
+      }
+      return _session?.getIdToken().getJwtToken();
     } catch (e) {
-      print('Error obteniendo estado: $e');
+      print('Error obteniendo token: $e');
       return null;
     }
   }
 
-  /// Obtiene observaciones del dispositivo
-  Future<List<dynamic>> getObservations(String userId) async {
-    try {
-      final headers = await _authHeaders();
-
-      final response = await http.get(
-        Uri.parse('$baseUrl/observations?userId=$userId'),
-        headers: headers,
-      );
-
-      print('OBS status: ${response.statusCode}');
-      print('OBS body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['observations'] ?? [];
-      }
-      return [];
-    } catch (e) {
-      print('Error obteniendo observaciones: $e');
-      return [];
+  String _parseError(String error) {
+    if (error.contains('UserNotFoundException') || error.contains('NotAuthorizedException')) {
+      return 'Email o contraseña incorrectos';
+    } else if (error.contains('UsernameExistsException')) {
+      return 'Este email ya está registrado';
+    } else if (error.contains('InvalidPasswordException')) {
+      return 'La contraseña debe tener al menos 8 caracteres';
+    } else if (error.contains('InvalidParameterException')) {
+      return 'Email inválido';
+    } else if (error.contains('NetworkError') || error.contains('Network')) {
+      return 'Sin conexión a internet';
+    } else {
+      return 'Error: $error';
     }
   }
 }

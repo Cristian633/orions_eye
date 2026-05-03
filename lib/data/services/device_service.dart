@@ -9,11 +9,14 @@ class DeviceService {
   Future<Map<String, String>> _authHeaders() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // ✅ Priorizar ID token (muchos authorizers de API Gateway/Cognito esperan este)
-    final token = prefs.getString('idToken') ??
-        prefs.getString('accessToken') ??
-        prefs.getString('token') ??
-        '';
+    // API Gateway + Cognito suele validar mejor idToken para authorizer de usuario
+    final idToken = prefs.getString('idToken') ?? '';
+    final accessToken = prefs.getString('accessToken') ?? '';
+    final fallbackToken = prefs.getString('token') ?? '';
+
+    final token = idToken.isNotEmpty
+        ? idToken
+        : (accessToken.isNotEmpty ? accessToken : fallbackToken);
 
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -23,10 +26,11 @@ class DeviceService {
       headers['Authorization'] = 'Bearer $token';
     }
 
-    // Debug útil (puedes quitar luego)
-    print('idToken exists: ${(prefs.getString('idToken') ?? '').isNotEmpty}');
-    print('accessToken exists: ${(prefs.getString('accessToken') ?? '').isNotEmpty}');
-    print('using token prefix: ${token.isNotEmpty ? token.substring(0, 20) : 'EMPTY'}');
+    // Debug útil
+    print('AUTH idToken exists: ${idToken.isNotEmpty}');
+    print('AUTH accessToken exists: ${accessToken.isNotEmpty}');
+    print('AUTH fallback token exists: ${fallbackToken.isNotEmpty}');
+    print('AUTH token prefix: ${token.isNotEmpty ? token.substring(0, 20) : 'EMPTY'}');
 
     return headers;
   }
@@ -39,27 +43,47 @@ class DeviceService {
   }) async {
     try {
       final headers = await _authHeaders();
+      final uri = Uri.parse('$baseUrl/devices/register');
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/devices/register'),
-        headers: headers,
-        body: jsonEncode({
-          'deviceId': deviceId,
-          'userId': userId,
-          'deviceName': deviceName,
-        }),
-      );
+      final payload = {
+        'deviceId': deviceId,
+        'userId': userId,
+        'deviceName': deviceName,
+      };
+
+      print('REGISTER url: $uri');
+      print('REGISTER payload: ${jsonEncode(payload)}');
+
+      final response = await http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 20));
 
       print('REGISTER status: ${response.statusCode}');
       print('REGISTER body: ${response.body}');
 
-      if (response.statusCode == 201 || response.statusCode == 200) {
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (response.body.trim().isEmpty) {
+          return {
+            'success': true,
+            'message': 'Registrado (sin body)',
+          };
+        }
         return jsonDecode(response.body) as Map<String, dynamic>;
-      } else if (response.statusCode == 401) {
-        throw Exception('No autorizado (401). Inicia sesión nuevamente.');
-      } else {
-        throw Exception('Error registrando dispositivo: ${response.statusCode}');
       }
+
+      if (response.statusCode == 401) {
+        throw Exception(
+          'No autorizado (401). Inicia sesión nuevamente. Body: ${response.body}',
+        );
+      }
+
+      throw Exception(
+        'Error registrando dispositivo: ${response.statusCode} | body: ${response.body}',
+      );
     } catch (e) {
       throw Exception('Error: $e');
     }
@@ -69,15 +93,23 @@ class DeviceService {
   Future<bool> captureImage(String deviceId) async {
     try {
       final headers = await _authHeaders();
+      final uri = Uri.parse('$baseUrl/devices/$deviceId/command');
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/devices/$deviceId/command'),
-        headers: headers,
-        body: jsonEncode({
-          'command': 'capture',
-          'payload': {},
-        }),
-      );
+      final payload = {
+        'command': 'capture',
+        'payload': <String, dynamic>{},
+      };
+
+      print('CAPTURE url: $uri');
+      print('CAPTURE payload: ${jsonEncode(payload)}');
+
+      final response = await http
+          .post(
+            uri,
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 20));
 
       print('CAPTURE status: ${response.statusCode}');
       print('CAPTURE body: ${response.body}');
@@ -93,16 +125,18 @@ class DeviceService {
   Future<Map<String, dynamic>?> getDeviceStatus(String deviceId) async {
     try {
       final headers = await _authHeaders();
+      final uri = Uri.parse('$baseUrl/devices/$deviceId/status');
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/devices/$deviceId/status'),
-        headers: headers,
-      );
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 20));
 
+      print('STATUS url: $uri');
       print('STATUS status: ${response.statusCode}');
       print('STATUS body: ${response.body}');
 
       if (response.statusCode == 200) {
+        if (response.body.trim().isEmpty) return <String, dynamic>{};
         return jsonDecode(response.body) as Map<String, dynamic>;
       }
       return null;
@@ -116,18 +150,23 @@ class DeviceService {
   Future<List<dynamic>> getObservations(String userId) async {
     try {
       final headers = await _authHeaders();
+      final uri = Uri.parse('$baseUrl/observations?userId=$userId');
 
-      final response = await http.get(
-        Uri.parse('$baseUrl/observations?userId=$userId'),
-        headers: headers,
-      );
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 20));
 
+      print('OBS url: $uri');
       print('OBS status: ${response.statusCode}');
       print('OBS body: ${response.body}');
 
       if (response.statusCode == 200) {
+        if (response.body.trim().isEmpty) return [];
         final data = jsonDecode(response.body);
-        return data['observations'] ?? [];
+        if (data is Map<String, dynamic>) {
+          return (data['observations'] as List?) ?? [];
+        }
+        return [];
       }
       return [];
     } catch (e) {
@@ -135,4 +174,4 @@ class DeviceService {
       return [];
     }
   }
-} 
+}

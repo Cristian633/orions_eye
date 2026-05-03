@@ -14,11 +14,41 @@ class DashboardScreen extends ConsumerStatefulWidget {
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
+    with WidgetsBindingObserver {
   final _deviceService = DeviceService();
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    Future.microtask(() async {
+      await ref.read(devicesProvider.notifier).refresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      ref.read(devicesProvider.notifier).refresh();
+    }
+  }
+
+  Future<void> _goToBluetoothScanAndRefresh() async {
+    await context.push('/bluetooth-scan');
+    if (mounted) {
+      await ref.read(devicesProvider.notifier).refresh();
+    }
+  }
+
   Future<void> _captureImage(String deviceId) async {
-    // Mostrar loading
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -40,11 +70,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
 
     try {
-      // Enviar comando de captura
       final success = await _deviceService.captureImage(deviceId);
 
       if (mounted) {
-        Navigator.pop(context); // Cerrar loading
+        Navigator.pop(context);
 
         if (success) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -55,7 +84,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           );
 
-          // Mostrar diálogo informativo
           showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -69,7 +97,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 TextButton(
                   onPressed: () {
                     Navigator.pop(context);
-                    // Ir a galería
                     context.push('/gallery');
                   },
                   child: const Text('Ir a Galería'),
@@ -310,9 +337,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           ),
                           const SizedBox(height: 24),
                           ElevatedButton.icon(
-                            onPressed: () {
-                              context.push('/bluetooth-scan');
-                            },
+                            onPressed: _goToBluetoothScanAndRefresh,
                             icon: const Icon(Icons.add),
                             label: const Text('Agregar Dispositivo'),
                             style: ElevatedButton.styleFrom(
@@ -326,18 +351,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      itemCount: devices.length,
-                      itemBuilder: (context, index) {
-                        final device = devices[index];
-                        return DeviceCard(
-                          device: device,
-                          onTap: () {
-                            context.push('/device/${device.id}?name=${device.name}');
-                          },
-                          onCapture: () => _captureImage(device.id),
-                        );
+                  : RefreshIndicator(
+                      onRefresh: () async {
+                        await ref.read(devicesProvider.notifier).refresh();
                       },
+                      child: ListView.builder(
+                        itemCount: devices.length,
+                        itemBuilder: (context, index) {
+                          final device = devices[index];
+                          return DeviceCard(
+                            device: device,
+                            onTap: () {
+                              context.push('/device/${device.id}?name=${device.name}');
+                            },
+                            onCapture: () => _captureImage(device.id),
+                          );
+                        },
+                      ),
                     ),
             ),
           ],
@@ -369,7 +399,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
                     ElevatedButton.icon(
                       icon: const Icon(Icons.bluetooth),
                       style: ElevatedButton.styleFrom(
@@ -379,15 +408,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         Navigator.of(context).pop();
-                        context.push('/bluetooth-scan');
+                        await _goToBluetoothScanAndRefresh();
                       },
                       label: const Text('Conectar por Bluetooth'),
                     ),
-                    
                     const SizedBox(height: 8),
-                    
                     OutlinedButton.icon(
                       icon: const Icon(Icons.wifi),
                       style: OutlinedButton.styleFrom(
@@ -500,13 +527,10 @@ class DeviceCard extends StatelessWidget {
                   ),
                 ],
               ),
-              
               if (device.isOnline) ...[
                 const SizedBox(height: 12),
                 const Divider(color: Colors.white24),
                 const SizedBox(height: 8),
-                
-                // Botón de captura
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(

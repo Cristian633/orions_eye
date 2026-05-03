@@ -23,6 +23,7 @@ class DevicesNotifier extends StateNotifier<List<Device>> {
     try {
       final devices = await _apiService.getDevices();
       state = devices;
+      print('DEVICES loaded: ${devices.length}');
     } catch (e) {
       print('Error cargando dispositivos: $e');
       state = [];
@@ -35,20 +36,14 @@ class DevicesNotifier extends StateNotifier<List<Device>> {
     String? model,
   }) async {
     try {
-      final device = await _apiService.registerDevice(
+      await _apiService.registerDevice(
         deviceId: deviceId,
         name: name,
         model: model,
       );
 
-      final idx = state.indexWhere((d) => d.id == device.id);
-      if (idx >= 0) {
-        final copy = [...state];
-        copy[idx] = device;
-        state = copy;
-      } else {
-        state = [...state, device];
-      }
+      // Forzar recarga real desde backend
+      await loadDevices();
       return true;
     } catch (e) {
       print('Error registrando dispositivo: $e');
