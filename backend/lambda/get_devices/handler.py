@@ -18,7 +18,7 @@ def resp(status, body):
         "body": json.dumps(body)
     }
 
-def handler(event, context):
+def lambda_handler(event, context):
     try:
         method = event.get("httpMethod") or event.get("requestContext", {}).get("http", {}).get("method")
         if method == "OPTIONS":

@@ -6,7 +6,7 @@ class AwsConfig {
 
   // API GATEWAY - APIs REST
   static const String apiEndpoint =
-      'https://c4cp36ywm6.execute-api.us-east-2.amazonaws.com/Prod';
+      'https://wovr1gy45g.execute-api.us-east-2.amazonaws.com/Prod';
 
   // Estos nombres son informativos (la app normalmente NO los usa directo)
   static const String devicesTableName = 'orions-eye-devices-dev';
