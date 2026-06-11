@@ -32,6 +32,14 @@ def lambda_handler(event, context):
         
         if not device_id:
             raise ValueError("deviceId es requerido")
+
+        # Resolver userId desde Devices si no viene en el evento
+        if not user_id or user_id == "unknown":
+            dev = devices_table.get_item(Key={'deviceId': device_id}).get('Item')
+            if dev and dev.get('userId'):
+                user_id = dev['userId']
+            else:
+                raise ValueError("No se pudo resolver userId desde Devices")
         
         # 1. Obtener la imagen
         if image_s3_key:
