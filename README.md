@@ -1,6 +1,6 @@
 # orions_eye_app
 
-A new Flutter project.
+An astronomical project
 
 ## Getting Started
 
