@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Orion's Eye Backend - Complete
+Description: Orion's Eye Backend - capture + image rules
 
 Parameters:
   Environment:
@@ -22,7 +22,8 @@ Globals:
         DEVICES_TABLE: !Ref DevicesTable
         OBSERVATIONS_TABLE: !Ref ObservationsTable
         S3_BUCKET: !Ref ImagesBucket
-        IOT_POLICY_NAME: OrionsEyeDevicePolicy
+        IOT_POLICY_NAME: OrionsEyeDevicePolicy-dev
+        IOT_DATA_ENDPOINT: a3kjpfhb0sgn22-ats.iot.us-east-2.amazonaws.com
 
   Api:
     Cors:
@@ -36,8 +37,6 @@ Globals:
           UserPoolArn: !Ref CognitoUserPoolArn
 
 Resources:
-  # ==================== DYNAMODB TABLES ====================
-
   DevicesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -94,22 +93,15 @@ Resources:
           Projection:
             ProjectionType: ALL
 
-  # ==================== S3 BUCKET ====================
-
   ImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'orions-eye-images-${Environment}-${AWS::AccountId}'
       CorsConfiguration:
         CorsRules:
-          - AllowedHeaders:
-              - '*'
-            AllowedMethods:
-              - GET
-              - PUT
-              - POST
-            AllowedOrigins:
-              - '*'
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
             MaxAge: 3000
       PublicAccessBlockConfiguration:
         BlockPublicAcls: false
@@ -129,8 +121,6 @@ Resources:
             Principal: '*'
             Action: 's3:GetObject'
             Resource: !Sub '${ImagesBucket.Arn}/*'
-
-  # ==================== API LAMBDAS ====================
 
   PresignUploadFunction:
     Type: AWS::Serverless::Function
@@ -195,15 +185,16 @@ Resources:
   SendDeviceCommandFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub 'orions-eye-send-command-${Environment}'
+      FunctionName: !Sub 'orions-eye-send-device-command-${Environment}'
       CodeUri: lambda/send_device_command/
       Handler: handler.lambda_handler
       Policies:
         - Statement:
             - Effect: Allow
               Action:
-                - iot-data:Publish
-              Resource: '*'
+                - iot:Publish
+              Resource:
+                - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*'
       Events:
         SendCommand:
           Type: Api
@@ -243,8 +234,6 @@ Resources:
             Path: /observations/{observationId}
             Method: GET
 
-  # ==================== PROCESSING + IOT ====================
-
   ProcessSpectralImageFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -274,44 +263,22 @@ Resources:
         - LambdaInvokePolicy:
             FunctionName: !Ref ProcessSpectralImageFunction
 
-  IoTDevicePolicy:
-    Type: AWS::IoT::Policy
-    Properties:
-      PolicyName: OrionsEyeDevicePolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Connect
-            Effect: Allow
-            Action:
-              - iot:Connect
-            Resource:
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*'
-          - Sid: Publish
-            Effect: Allow
-            Action:
-              - iot:Publish
-            Resource:
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/status'
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/data'
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/image'
-          - Sid: Subscribe
-            Effect: Allow
-            Action:
-              - iot:Subscribe
-            Resource:
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/orionseye/*/command'
-          - Sid: Receive
-            Effect: Allow
-            Action:
-              - iot:Receive
-            Resource:
-              - !Sub 'arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/command'
-
-  IoTRuleProcessImage:
+  IoTRuleCapture:
     Type: AWS::IoT::TopicRule
     Properties:
-      RuleName: !Sub 'orions_eye_process_image_${Environment}'
+      RuleName: !Sub 'orions_eye_capture_${Environment}'
+      TopicRulePayload:
+        RuleDisabled: false
+        AwsIotSqlVersion: '2016-03-23'
+        Sql: "SELECT *, topic() as topic FROM 'orionseye/+/capture'"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt IoTRuleHandlerFunction.Arn
+
+  IoTRuleImage:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Sub 'orions_eye_image_${Environment}'
       TopicRulePayload:
         RuleDisabled: false
         AwsIotSqlVersion: '2016-03-23'
@@ -320,33 +287,21 @@ Resources:
           - Lambda:
               FunctionArn: !GetAtt IoTRuleHandlerFunction.Arn
 
-  IoTRuleUpdateStatus:
-    Type: AWS::IoT::TopicRule
-    Properties:
-      RuleName: !Sub 'orions_eye_update_status_${Environment}'
-      TopicRulePayload:
-        RuleDisabled: false
-        AwsIotSqlVersion: '2016-03-23'
-        Sql: "SELECT *, topic() as topic FROM 'orionseye/+/status'"
-        Actions:
-          - Lambda:
-              FunctionArn: !GetAtt IoTRuleHandlerFunction.Arn
-
-  IoTRuleHandlerPermissionProcessImage:
+  IoTRuleHandlerPermissionCapture:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref IoTRuleHandlerFunction
       Action: lambda:InvokeFunction
       Principal: iot.amazonaws.com
-      SourceArn: !GetAtt IoTRuleProcessImage.Arn
+      SourceArn: !GetAtt IoTRuleCapture.Arn
 
-  IoTRuleHandlerPermissionUpdateStatus:
+  IoTRuleHandlerPermissionImage:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref IoTRuleHandlerFunction
       Action: lambda:InvokeFunction
       Principal: iot.amazonaws.com
-      SourceArn: !GetAtt IoTRuleUpdateStatus.Arn
+      SourceArn: !GetAtt IoTRuleImage.Arn
 
 Outputs:
   ApiEndpoint:
@@ -364,4 +319,4 @@ Outputs:
 
   IoTEndpoint:
     Description: AWS IoT Core endpoint
-    Value: !Sub '${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com'
+    Value: a3kjpfhb0sgn22-ats.iot.us-east-2.amazonaws.com

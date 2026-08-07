@@ -45,24 +45,6 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["GetObservationDetailFunction"]
 
-[function_build_definitions.bf15d923-da56-4b67-841a-75e73ae0bdd0]
-codeuri = "C:\\Users\\deleo\\Desktop\\orions_eye_app\\orions_eye_app\\backend\\lambda\\process_spectral_image"
-runtime = "python3.11"
-architecture = "x86_64"
-handler = "handler.lambda_handler"
-manifest_hash = ""
-packagetype = "Zip"
-functions = ["ProcessSpectralImageFunction"]
-
-[function_build_definitions.7ea11d33-ec0c-42e1-892f-dfc8cc6e635b]
-codeuri = "C:\\Users\\deleo\\Desktop\\orions_eye_app\\orions_eye_app\\backend\\lambda\\iot_rule_handler"
-runtime = "python3.11"
-architecture = "x86_64"
-handler = "handler.lambda_handler"
-manifest_hash = ""
-packagetype = "Zip"
-functions = ["IoTRuleHandlerFunction"]
-
 [function_build_definitions.919d2cc7-2b67-41bf-a5df-818fd2adea91]
 codeuri = "C:\\Users\\deleo\\Desktop\\orions_eye_app\\orions_eye_app\\backend\\lambda\\get_devices"
 runtime = "python3.11"
@@ -71,5 +53,23 @@ handler = "handler.lambda_handler"
 manifest_hash = ""
 packagetype = "Zip"
 functions = ["GetDevicesFunction"]
+
+[function_build_definitions.c874a121-d934-4e7e-9a8e-cc0e10da8445]
+codeuri = "C:\\Users\\deleo\\Desktop\\orions_eye_app\\orions_eye_app\\backend\\lambda\\process_spectral_image"
+runtime = "python3.11"
+architecture = "x86_64"
+handler = "handler.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["ProcessSpectralImageFunction"]
+
+[function_build_definitions.06f4ddcd-c909-4653-81d8-22fd3eb64a7e]
+codeuri = "C:\\Users\\deleo\\Desktop\\orions_eye_app\\orions_eye_app\\backend\\lambda\\iot_rule_handler"
+runtime = "python3.11"
+architecture = "x86_64"
+handler = "handler.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["IoTRuleHandlerFunction"]
 
 [layer_build_definitions]

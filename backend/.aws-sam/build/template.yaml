@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Orion's Eye Backend - Complete
+Description: Orion's Eye Backend - capture + image rules
 Parameters:
   Environment:
     Type: String
@@ -23,7 +23,8 @@ Globals:
           Ref: ObservationsTable
         S3_BUCKET:
           Ref: ImagesBucket
-        IOT_POLICY_NAME: OrionsEyeDevicePolicy
+        IOT_POLICY_NAME: OrionsEyeDevicePolicy-dev
+        IOT_DATA_ENDPOINT: a3kjpfhb0sgn22-ats.iot.us-east-2.amazonaws.com
   Api:
     Cors:
       AllowOrigin: '''*'''
@@ -200,15 +201,16 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: orions-eye-send-command-${Environment}
+        Fn::Sub: orions-eye-send-device-command-${Environment}
       CodeUri: SendDeviceCommandFunction
       Handler: handler.lambda_handler
       Policies:
       - Statement:
         - Effect: Allow
           Action:
-          - iot-data:Publish
-          Resource: '*'
+          - iot:Publish
+          Resource:
+          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*
       Events:
         SendCommand:
           Type: Api
@@ -293,44 +295,26 @@ Resources:
             Ref: ProcessSpectralImageFunction
     Metadata:
       SamResourceId: IoTRuleHandlerFunction
-  IoTDevicePolicy:
-    Type: AWS::IoT::Policy
-    Properties:
-      PolicyName: OrionsEyeDevicePolicy
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-        - Sid: Connect
-          Effect: Allow
-          Action:
-          - iot:Connect
-          Resource:
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:client/*
-        - Sid: Publish
-          Effect: Allow
-          Action:
-          - iot:Publish
-          Resource:
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/status
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/data
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/image
-        - Sid: Subscribe
-          Effect: Allow
-          Action:
-          - iot:Subscribe
-          Resource:
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topicfilter/orionseye/*/command
-        - Sid: Receive
-          Effect: Allow
-          Action:
-          - iot:Receive
-          Resource:
-          - Fn::Sub: arn:aws:iot:${AWS::Region}:${AWS::AccountId}:topic/orionseye/*/command
-  IoTRuleProcessImage:
+  IoTRuleCapture:
     Type: AWS::IoT::TopicRule
     Properties:
       RuleName:
-        Fn::Sub: orions_eye_process_image_${Environment}
+        Fn::Sub: orions_eye_capture_${Environment}
+      TopicRulePayload:
+        RuleDisabled: false
+        AwsIotSqlVersion: '2016-03-23'
+        Sql: SELECT *, topic() as topic FROM 'orionseye/+/capture'
+        Actions:
+        - Lambda:
+            FunctionArn:
+              Fn::GetAtt:
+              - IoTRuleHandlerFunction
+              - Arn
+  IoTRuleImage:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName:
+        Fn::Sub: orions_eye_image_${Environment}
       TopicRulePayload:
         RuleDisabled: false
         AwsIotSqlVersion: '2016-03-23'
@@ -341,22 +325,7 @@ Resources:
               Fn::GetAtt:
               - IoTRuleHandlerFunction
               - Arn
-  IoTRuleUpdateStatus:
-    Type: AWS::IoT::TopicRule
-    Properties:
-      RuleName:
-        Fn::Sub: orions_eye_update_status_${Environment}
-      TopicRulePayload:
-        RuleDisabled: false
-        AwsIotSqlVersion: '2016-03-23'
-        Sql: SELECT *, topic() as topic FROM 'orionseye/+/status'
-        Actions:
-        - Lambda:
-            FunctionArn:
-              Fn::GetAtt:
-              - IoTRuleHandlerFunction
-              - Arn
-  IoTRuleHandlerPermissionProcessImage:
+  IoTRuleHandlerPermissionCapture:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName:
@@ -365,9 +334,9 @@ Resources:
       Principal: iot.amazonaws.com
       SourceArn:
         Fn::GetAtt:
-        - IoTRuleProcessImage
+        - IoTRuleCapture
         - Arn
-  IoTRuleHandlerPermissionUpdateStatus:
+  IoTRuleHandlerPermissionImage:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName:
@@ -376,7 +345,7 @@ Resources:
       Principal: iot.amazonaws.com
       SourceArn:
         Fn::GetAtt:
-        - IoTRuleUpdateStatus
+        - IoTRuleImage
         - Arn
 Outputs:
   ApiEndpoint:
@@ -394,5 +363,4 @@ Outputs:
       Ref: ImagesBucket
   IoTEndpoint:
     Description: AWS IoT Core endpoint
-    Value:
-      Fn::Sub: ${AWS::AccountId}.iot.${AWS::Region}.amazonaws.com
+    Value: a3kjpfhb0sgn22-ats.iot.us-east-2.amazonaws.com

@@ -17,7 +17,7 @@ import os
 import re
 from logging import NullHandler
 
-__version__ = '1.43.10'
+__version__ = '1.43.57'
 
 
 # Configure default logger to do nothing
@@ -50,6 +50,20 @@ _xform_cache = {
     ('ExecutePartiQLTransaction', '-'): 'execute-partiql-transaction',
     ('ExecutePartiQLBatch', '_'): 'execute_partiql_batch',
     ('ExecutePartiQLBatch', '-'): 'execute-partiql-batch',
+    ('CreateOAuth2Token', '_'): 'create_oauth2_token',
+    ('CreateOAuth2Token', '-'): 'create-oauth2-token',
+    ('CreateOAuth2TokenWithIAM', '_'): 'create_oauth2_token_with_iam',
+    ('CreateOAuth2TokenWithIAM', '-'): 'create-oauth2-token-with-iam',
+    (
+        'IntrospectOAuth2TokenWithIAM',
+        '_',
+    ): 'introspect_oauth2_token_with_iam',
+    (
+        'IntrospectOAuth2TokenWithIAM',
+        '-',
+    ): 'introspect-oauth2-token-with-iam',
+    ('RevokeOAuth2TokenWithIAM', '_'): 'revoke_oauth2_token_with_iam',
+    ('RevokeOAuth2TokenWithIAM', '-'): 'revoke-oauth2-token-with-iam',
     (
         'AssociateWhatsAppBusinessAccount',
         '_',
@@ -58,6 +72,8 @@ _xform_cache = {
         'AssociateWhatsAppBusinessAccount',
         '-',
     ): 'associate-whatsapp-business-account',
+    ('CreateWhatsAppFlow', '_'): 'create_whatsapp_flow',
+    ('CreateWhatsAppFlow', '-'): 'create-whatsapp-flow',
     ('CreateWhatsAppMessageTemplate', '_'): 'create_whatsapp_message_template',
     ('CreateWhatsAppMessageTemplate', '-'): 'create-whatsapp-message-template',
     (
@@ -76,10 +92,14 @@ _xform_cache = {
         'CreateWhatsAppMessageTemplateMedia',
         '-',
     ): 'create-whatsapp-message-template-media',
+    ('DeleteWhatsAppFlow', '_'): 'delete_whatsapp_flow',
+    ('DeleteWhatsAppFlow', '-'): 'delete-whatsapp-flow',
     ('DeleteWhatsAppMessageMedia', '_'): 'delete_whatsapp_message_media',
     ('DeleteWhatsAppMessageMedia', '-'): 'delete-whatsapp-message-media',
     ('DeleteWhatsAppMessageTemplate', '_'): 'delete_whatsapp_message_template',
     ('DeleteWhatsAppMessageTemplate', '-'): 'delete-whatsapp-message-template',
+    ('DeprecateWhatsAppFlow', '_'): 'deprecate_whatsapp_flow',
+    ('DeprecateWhatsAppFlow', '-'): 'deprecate-whatsapp-flow',
     (
         'DisassociateWhatsAppBusinessAccount',
         '_',
@@ -106,6 +126,10 @@ _xform_cache = {
     ): 'get-linked-whatsapp-business-account-phone-number',
     ('GetOTelEnrichment', '_'): 'get_otel_enrichment',
     ('GetOTelEnrichment', '-'): 'get-otel-enrichment',
+    ('GetWhatsAppFlow', '_'): 'get_whatsapp_flow',
+    ('GetWhatsAppFlow', '-'): 'get-whatsapp-flow',
+    ('GetWhatsAppFlowPreview', '_'): 'get_whatsapp_flow_preview',
+    ('GetWhatsAppFlowPreview', '-'): 'get-whatsapp-flow-preview',
     ('GetWhatsAppMessageMedia', '_'): 'get_whatsapp_message_media',
     ('GetWhatsAppMessageMedia', '-'): 'get-whatsapp-message-media',
     ('GetWhatsAppMessageTemplate', '_'): 'get_whatsapp_message_template',
@@ -118,12 +142,18 @@ _xform_cache = {
         'ListLinkedWhatsAppBusinessAccounts',
         '-',
     ): 'list-linked-whatsapp-business-accounts',
+    ('ListWhatsAppFlowAssets', '_'): 'list_whatsapp_flow_assets',
+    ('ListWhatsAppFlowAssets', '-'): 'list-whatsapp-flow-assets',
+    ('ListWhatsAppFlows', '_'): 'list_whatsapp_flows',
+    ('ListWhatsAppFlows', '-'): 'list-whatsapp-flows',
     ('ListWhatsAppMessageTemplates', '_'): 'list_whatsapp_message_templates',
     ('ListWhatsAppMessageTemplates', '-'): 'list-whatsapp-message-templates',
     ('ListWhatsAppTemplateLibrary', '_'): 'list_whatsapp_template_library',
     ('ListWhatsAppTemplateLibrary', '-'): 'list-whatsapp-template-library',
     ('PostWhatsAppMessageMedia', '_'): 'post_whatsapp_message_media',
     ('PostWhatsAppMessageMedia', '-'): 'post-whatsapp-message-media',
+    ('PublishWhatsAppFlow', '_'): 'publish_whatsapp_flow',
+    ('PublishWhatsAppFlow', '-'): 'publish-whatsapp-flow',
     (
         'PutWhatsAppBusinessAccountEventDestinations',
         '_',
@@ -138,6 +168,10 @@ _xform_cache = {
     ('StartOTelEnrichment', '-'): 'start-otel-enrichment',
     ('StopOTelEnrichment', '_'): 'stop_otel_enrichment',
     ('StopOTelEnrichment', '-'): 'stop-otel-enrichment',
+    ('UpdateWhatsAppFlow', '_'): 'update_whatsapp_flow',
+    ('UpdateWhatsAppFlow', '-'): 'update-whatsapp-flow',
+    ('UpdateWhatsAppFlowAssets', '_'): 'update_whatsapp_flow_assets',
+    ('UpdateWhatsAppFlowAssets', '-'): 'update-whatsapp-flow-assets',
     ('UpdateWhatsAppMessageTemplate', '_'): 'update_whatsapp_message_template',
     ('UpdateWhatsAppMessageTemplate', '-'): 'update-whatsapp-message-template',
 }

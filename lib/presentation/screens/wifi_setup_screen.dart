@@ -97,7 +97,7 @@ class _WifiSetupScreenState extends State<WifiSetupScreen> {
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw TimeoutException("discoverServices timeout (10s)");
       });
-
+      
       bool foundService = false;
       bool foundSsid = false;
       bool foundPass = false;

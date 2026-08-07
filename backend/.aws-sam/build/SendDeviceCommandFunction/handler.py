@@ -1,42 +1,78 @@
 import json
-import os
 import boto3
 from datetime import datetime
+from urllib.parse import unquote
+
+IOT_REGION = "us-east-2"
+
 
 def lambda_handler(event, context):
     try:
         print("Event:", json.dumps(event))
 
         # Path params: /devices/{deviceId}/command
-        device_id = event.get("pathParameters", {}).get("deviceid") or \
-                    event.get("pathParameters", {}).get("deviceId")
+        path_params = event.get("pathParameters") or {}
+        device_id = path_params.get("deviceId") or path_params.get("deviceid")
 
         if not device_id:
-            return {"statusCode": 400, "body": "Missing deviceId"}
+            return _resp(400, {"error": "Missing deviceId"})
+
+        device_id = unquote(device_id).strip()
 
         body = event.get("body") or "{}"
         if isinstance(body, str):
-            body = json.loads(body)
+            try:
+                body = json.loads(body)
+            except Exception:
+                body = {}
 
+        # action default capture
         action = body.get("action", "capture")
+        payload_in = body.get("payload", {}) or {}
 
-        iot_endpoint = os.environ["IOT_DATA_ENDPOINT"]
-        iot = boto3.client("iot-data", endpoint_url=f"https://{iot_endpoint}")
+        # Cliente IoT Data
+        iot = boto3.client("iot-data", region_name=IOT_REGION)
 
-        topic = f"orionseye/{device_id}/capture"
+        # ✅ Topic correcto para ESP32 subscriber
+        topic = f"orionseye/{device_id}/command"
+
         payload = {
-            "action": action,
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "command": action,                         # <- ESP32 espera command
+            "payload": payload_in,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "source": "api"
         }
 
-        iot.publish(topic=topic, qos=0, payload=json.dumps(payload))
+        print(f"Publishing to topic: {topic}")
+        print(f"Payload: {json.dumps(payload)}")
+
+        iot.publish(
+            topic=topic,
+            qos=1,
+            payload=json.dumps(payload)
+        )
+
         print(f"Publicado a {topic}")
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"ok": True, "topic": topic, "payload": payload})
-        }
+        return _resp(200, {
+            "ok": True,
+            "topic": topic,
+            "payload": payload
+        })
 
     except Exception as e:
         print("Error:", str(e))
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        import traceback
+        traceback.print_exc()
+        return _resp(500, {"error": str(e)})
+
+
+def _resp(code, body):
+    return {
+        "statusCode": code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+        },
+        "body": json.dumps(body)
+    }

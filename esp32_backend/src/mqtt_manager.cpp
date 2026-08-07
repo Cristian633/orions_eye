@@ -30,8 +30,8 @@ void MQTTManager::begin(String deviceId) {
     topicImageUploaded = String(MQTT_TOPIC_IMAGE_UPLOADED);
     topicImageUploaded.replace("%s", deviceId);
     
-    Serial.println("📡 Configurando MQTT Manager...");
-    Serial.println("📍 Topics:");
+    Serial.println(" Configurando MQTT Manager...");
+    Serial.println(" Topics:");
     Serial.println("  - Command: " + topicCommand);
     Serial.println("  - Status: " + topicStatus);
     Serial.println("  - Upload Response: " + topicUploadResponse);
@@ -47,7 +47,7 @@ void MQTTManager::begin(String deviceId) {
     mqttClient.setKeepAlive(60);
     mqttClient.setSocketTimeout(30);
     
-    Serial.println("✅ MQTT Manager configurado");
+    Serial.println(" MQTT Manager configurado");
 }
 
 bool MQTTManager::connect() {
@@ -62,7 +62,7 @@ bool MQTTManager::connect() {
     String clientId = "ESP32_" + deviceId;
     
     if (mqttClient.connect(clientId.c_str())) {
-        Serial.println("✅ Conectado a AWS IoT Core!");
+        Serial.println(" Conectado a AWS IoT Core!");
         
         isConnected = true;
         
